@@ -745,6 +745,7 @@
       e.preventDefault();
       const n = nameEl.value.trim().replace(/\s+/g, ' ');
       const pw = pwEl.value;
+      const pw2 = isNew ? document.getElementById('pw2').value : '';
       if (!n || busy) return;
       // 다른 기기에서 만든 이름·비밀번호·기록을 먼저 받아 와요.
       busy = true;
@@ -755,7 +756,7 @@
       if (isNew) {
         if (users().includes(n)) return fb('이미 있는 이름이에요. 다른 이름을 쓰거나 \'입장하기\'를 눌러 주세요.');
         if (pw.length < 4) return fb('비밀번호는 4글자 이상으로 만들어요.');
-        if (pw !== document.getElementById('pw2').value) return fb('두 비밀번호가 달라요. 다시 확인해 주세요.');
+        if (pw !== pw2) return fb('두 비밀번호가 달라요. 다시 확인해 주세요.');
         addUser(n);
         setPassword(n, pw);
       } else {

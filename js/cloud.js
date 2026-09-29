@@ -5,7 +5,9 @@
  *   students/{이름}  { name, pw, state, t, deleted }   학생마다 한 문서
  *   meta/teacher      { pw, t }                         선생님 비밀번호
  * t는 마지막으로 고친 시각입니다. 기기와 서버 가운데 더 나중에 고친 쪽을 따릅니다.
- * 인터넷이 안 되거나 Firebase를 불러오지 못하면 이 기기에만 저장합니다.
+ * 인터넷이 안 되면 이 기기에 먼저 저장해 두고, 다음에 연결될 때 맞춥니다.
+ * Firebase SDK 대신 Firestore REST API(fetch)를 씁니다. 파일이 가볍고, 학교망처럼
+ * 오래 열어 두는 연결을 막는 곳에서도 잘 됩니다.
  */
 (() => {
   'use strict';
@@ -32,17 +34,47 @@
   const del = (k) => { try { localStorage.removeItem(k); } catch (e) { /* 무시 */ } };
   const json = (k, d) => { try { return JSON.parse(get(k)) || d; } catch (e) { return d; } };
   const localT = (name) => +get(TIME_PREFIX + name) || 0;
-  const withTimeout = (p) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), TIMEOUT))]);
 
-  let db = null;
-  try {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-  } catch (e) {
-    console.warn('Firebase를 쓸 수 없어 이 기기에만 저장합니다.', e);
+  const BASE = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
+  const KEY = `key=${firebaseConfig.apiKey}`;
+  const db = typeof fetch === 'function';
+  // 문서 이름: '/'가 들어간 이름도 저장할 수 있게 한 번 인코딩하고, 주소에 넣으려고 한 번 더 인코딩해요.
+  const docUrl = (path) => `${BASE}/${path}?${KEY}`;
+  const studentPath = (name) => `students/${encodeURIComponent(encodeURIComponent(name))}`;
+
+  // Firestore 값 ↔ 자바스크립트 값
+  function toFields(o) {
+    const f = {};
+    Object.keys(o).forEach((k) => {
+      const v = o[k];
+      f[k] = typeof v === 'boolean' ? { booleanValue: v } : typeof v === 'number' ? { integerValue: String(Math.round(v)) } : { stringValue: String(v) };
+    });
+    return { fields: f };
   }
-  const students = () => db.collection('students');
-  const docId = (name) => encodeURIComponent(name); // '/'가 들어간 이름도 저장할 수 있게
+  function fromDoc(doc) {
+    const o = {};
+    const f = (doc && doc.fields) || {};
+    Object.keys(f).forEach((k) => {
+      const v = f[k];
+      o[k] = 'booleanValue' in v ? v.booleanValue : 'integerValue' in v ? +v.integerValue : 'doubleValue' in v ? +v.doubleValue : v.stringValue;
+    });
+    return o;
+  }
+  async function request(url, opts) {
+    const ctl = new AbortController();
+    const tm = setTimeout(() => ctl.abort(), TIMEOUT);
+    try {
+      const r = await fetch(url, Object.assign({ signal: ctl.signal }, opts));
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error(`Firestore ${r.status}`);
+      return await r.json();
+    } finally { clearTimeout(tm); }
+  }
+  const getDoc = async (path) => { const d = await request(docUrl(path)); return d ? fromDoc(d) : null; };
+  // keepalive: 창을 닫는 순간에도 저장이 끝까지 가도록
+  const setDoc = (path, data) => request(docUrl(path), {
+    method: 'PATCH', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(toFields(data)),
+  });
 
   /* ---------- 서버 → 기기 ---------- */
   function applyStudent(d) {
@@ -77,14 +109,18 @@
   async function pullAll() {
     if (!db) return false;
     let changed = false;
-    const snap = await withTimeout(students().get());
     const seen = new Set();
-    snap.forEach((doc) => {
-      const d = doc.data();
-      if (!d || !d.name) return;
-      seen.add(d.name);
-      if (syncStudent(d.name, d)) changed = true;
-    });
+    let token = '';
+    do {
+      const page = await request(`${BASE}/students?${KEY}&pageSize=300${token ? `&pageToken=${encodeURIComponent(token)}` : ''}`);
+      ((page && page.documents) || []).forEach((doc) => {
+        const d = fromDoc(doc);
+        if (!d.name) return;
+        seen.add(d.name);
+        if (syncStudent(d.name, d)) changed = true;
+      });
+      token = page && page.nextPageToken;
+    } while (token);
     // 이 기기에만 있는 학생(예전 기록)은 서버로 올립니다.
     json(USERS_KEY, []).filter((n) => !seen.has(n)).forEach((n) => pushStudent(n));
     if (await syncTeacher()) changed = true;
@@ -93,14 +129,11 @@
 
   async function pullOne(name) {
     if (!db || !name) return false;
-    const doc = await withTimeout(students().doc(docId(name)).get());
-    return syncStudent(name, doc.exists ? doc.data() : null);
+    return syncStudent(name, await getDoc(studentPath(name)));
   }
 
   async function syncTeacher() {
-    const ref = db.collection('meta').doc('teacher');
-    const doc = await withTimeout(ref.get());
-    const d = doc.exists ? doc.data() : null;
+    const d = await getDoc('meta/teacher');
     const lt = +get(TEACHER_TIME) || 0;
     if (d && (d.t || 0) > lt) {
       if (d.pw) set(TEACHER_KEY, d.pw); else del(TEACHER_KEY);
@@ -129,14 +162,13 @@
       const data = live
         ? { name, pw, state: get(STATE_PREFIX + name) || '', t: localT(name) || Date.now(), deleted: false }
         : { name, pw: '', state: '', t: localT(name) || Date.now(), deleted: true };
-      students().doc(docId(name)).set(data).catch((e) => console.warn('저장하지 못했어요', name, e));
+      setDoc(studentPath(name), data).catch((e) => console.warn('저장하지 못했어요', name, e));
     });
     waiting.clear();
   }
   function pushTeacher() {
     if (!db) return;
-    db.collection('meta').doc('teacher')
-      .set({ pw: get(TEACHER_KEY) || '', t: +get(TEACHER_TIME) || Date.now() })
+    setDoc('meta/teacher', { pw: get(TEACHER_KEY) || '', t: +get(TEACHER_TIME) || Date.now() })
       .catch((e) => console.warn('선생님 비밀번호를 저장하지 못했어요', e));
   }
 
