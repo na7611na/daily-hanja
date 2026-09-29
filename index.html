@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>매일 한자</title>
+  <meta name="description" content="평일 아침 5분, 하루 한 자씩 뜻과 음을 익히는 한자 학습 앱">
+  <meta name="theme-color" content="#ff7a59">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#/" class="brand"><span class="brand-mark">漢</span> 매일 한자</a>
+    <span class="top-right">
+      <button class="who" id="who" hidden></button>
+      <span class="today" id="today-label"></span>
+    </span>
+  </header>
+
+  <main id="app" tabindex="-1"></main>
+
+  <nav class="tabbar" aria-label="메뉴">
+    <a href="#/" data-tab="home"><span class="tab-ico">🏠</span>오늘</a>
+    <a href="#/list" data-tab="list"><span class="tab-ico">📚</span>한자 목록</a>
+    <a href="#/exam" data-tab="exam"><span class="tab-ico">🏆</span>급수 시험</a>
+    <a href="#/records" data-tab="records"><span class="tab-ico">📒</span>학습 기록</a>
+    <a href="#/settings" data-tab="settings"><span class="tab-ico">⚙️</span>설정</a>
+  </nav>
+
+  <script src="js/data.js"></script>
+  <script src="js/hunum.js"></script>
+  <script src="js/sentences.js"></script>
+  <script src="js/infer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
