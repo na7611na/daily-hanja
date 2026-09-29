@@ -9,7 +9,8 @@
  *   금요일: 위 과정 + ⑤ 이번 주 한자 전체 복습(일주일 복습)
  *   급수 완료: '급수 시험' 코너에서 전체 복습 → 시험(어휘 제시, 뜻과 음 쓰기)
  *
- * 저장: 브라우저 localStorage (서버 없음). 이름(아이디)별로 따로 저장합니다.
+ * 저장: 브라우저 localStorage에 이름(아이디)별로 저장하고, js/cloud.js가 Firebase와 맞춰
+ *       다른 기기에서도 이어서 공부할 수 있게 합니다.
  */
 (() => {
   'use strict';
@@ -55,8 +56,9 @@
 
   /* ================= 저장 (학생별) ================= */
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 무시 */ } }
-  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) { /* 무시 */ } }
+  const cloud = window.Cloud || { on: false, pullAll: async () => false, pullOne: async () => false, changed() {}, flush() {} };
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 무시 */ } cloud.changed(k); }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) { /* 무시 */ } cloud.changed(k); }
 
   function blankState() {
     return {
@@ -95,7 +97,7 @@
     return blankState();
   }
 
-  // 비밀번호: 서버가 없으므로 이 기기 안에서 친구 기록에 들어가지 못하게 막는 용도입니다.
+  // 비밀번호: 친구 기록에 들어가지 못하게 막는 정도의 간단한 보호입니다.
   function pwHash(name, pw) {
     const str = `everyday-hanja|${name}|${pw}`;
     let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -122,9 +124,13 @@
   const checkTeacher = (pw) => lsGet(TEACHER_KEY) === pwHash('__teacher__', pw);
   const setTeacher = (pw) => lsSet(TEACHER_KEY, pwHash('__teacher__', pw));
 
-  let user = lsGet(CURRENT_KEY);
-  if (user && (!users().includes(user) || !hasPassword(user))) user = null;
-  let S = user ? loadState(user) : blankState();
+  let user = null;
+  let S = blankState();
+  function restoreUser() {
+    user = lsGet(CURRENT_KEY);
+    if (user && (!users().includes(user) || !hasPassword(user))) user = null;
+    S = user ? loadState(user) : blankState();
+  }
   function save() {
     if (user) lsSet(stateKey(user), JSON.stringify(S));
   }
@@ -723,22 +729,29 @@
         </form>
       </div>
       ${list.length && !isNew ? `<div class="card">
-        <h3>이 기기에서 공부한 친구들</h3>
+        <h3>함께 공부하는 친구들</h3>
         <p class="small muted">내 이름을 누르고 비밀번호를 넣으면 이어서 공부할 수 있어요.</p>
         <div class="name-list">${list.map((n) => `<button class="btn soft" data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>
       </div>` : ''}
-      <p class="small muted center">학습 기록은 이 기기(브라우저)에 이름별로 저장돼요.<br>
+      <p class="small muted center">학습 기록은 이름별로 인터넷에 저장돼요. 다른 기기에서도 이름과 비밀번호로 이어서 공부할 수 있어요.<br>
         비밀번호를 잊었다면 선생님께 말씀드리세요. · <a href="#/teacher">선생님 메뉴</a></p>`;
     const fb = (t) => { document.getElementById('fb').innerHTML = `<div class="feedback no">${t}</div>`; };
     const nameEl = document.getElementById('name');
     const pwEl = document.getElementById('pw');
     $app.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { loginMode = b.dataset.mode; renderLogin(); }));
     $app.querySelectorAll('[data-name]').forEach((b) => b.addEventListener('click', () => { nameEl.value = b.dataset.name; pwEl.focus(); }));
-    document.getElementById('login').addEventListener('submit', (e) => {
+    let busy = false;
+    document.getElementById('login').addEventListener('submit', async (e) => {
       e.preventDefault();
       const n = nameEl.value.trim().replace(/\s+/g, ' ');
       const pw = pwEl.value;
-      if (!n) return;
+      if (!n || busy) return;
+      // 다른 기기에서 만든 이름·비밀번호·기록을 먼저 받아 와요.
+      busy = true;
+      document.getElementById('fb').innerHTML = '<div class="small muted">확인하는 중…</div>';
+      await cloud.pullOne(n);
+      busy = false;
+      document.getElementById('fb').innerHTML = '';
       if (isNew) {
         if (users().includes(n)) return fb('이미 있는 이름이에요. 다른 이름을 쓰거나 \'입장하기\'를 눌러 주세요.');
         if (pw.length < 4) return fb('비밀번호는 4글자 이상으로 만들어요.');
@@ -1978,7 +1991,7 @@
       <div class="row" style="margin-bottom:10px"><a href="${back}" class="small">← 돌아가기</a></div>
       <div class="card">
         <h2>👩‍🏫 선생님 메뉴</h2>
-        <p class="small muted">이 기기에서 공부한 학생 ${list.length}명 · 이름을 누르면 자세히 보고 비밀번호를 초기화할 수 있어요.</p>
+        <p class="small muted">공부한 학생 ${list.length}명 · 이름을 누르면 자세히 보고 비밀번호를 초기화할 수 있어요.</p>
         ${list.length ? `<div style="overflow-x:auto"><table class="class-table">
           <tr><th>이름</th><th>급수·단계</th><th>아는<br>한자</th><th>공부한<br>한자</th><th>급수<br>시험</th><th>최근</th></tr>${rows}</table></div>`
           : '<p class="muted">아직 학생이 없어요.</p>'}
@@ -2043,7 +2056,14 @@
     document.body.classList.remove('in-lesson', 'logged-out');
     window.scrollTo(0, 0);
 
-    if (parts[0] === 'teacher') { renderTeacher(); return; }
+    if (parts[0] === 'teacher') {
+      renderTeacher();
+      // 다른 기기에서 공부한 학생들의 기록도 받아 와요.
+      cloud.pullAll().then((changed) => {
+        if (changed && location.hash.replace(/^#\/?/, '').startsWith('teacher')) { restoreUser(); renderTeacher(); }
+      });
+      return;
+    }
     if (!user) { stopTimer(); renderLogin(); return; }
     switch (parts[0]) {
       case 'lesson': startLesson('lesson'); break;
@@ -2063,5 +2083,28 @@
 
   document.getElementById('who').addEventListener('click', () => { location.hash = '#/records'; });
   window.addEventListener('hashchange', route);
-  route();
+
+  // 공부 중이 아닐 때 다시 화면으로 돌아오면, 다른 기기에서 공부한 기록을 받아 와요.
+  const busyScreens = ['lesson', 'weekly', 'review', 'extra', 'relearn', 'level', 'test'];
+  function onScreen() { return location.hash.replace(/^#\/?/, '').split('/')[0]; }
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible' || busyScreens.includes(onScreen())) return;
+    const was = user;
+    const changed = onScreen() === 'teacher' ? await cloud.pullAll() : await cloud.pullOne(user);
+    if (changed && !busyScreens.includes(onScreen())) {
+      restoreUser();
+      if (user !== was) session = null;
+      route();
+    }
+  });
+
+  // 처음 열 때: 서버의 기록을 받아 온 뒤 화면을 그려요.
+  (async () => {
+    if (cloud.on) {
+      $app.innerHTML = '<div class="card center"><p class="muted">기록을 불러오는 중…</p></div>';
+      await cloud.pullAll();
+    }
+    restoreUser();
+    route();
+  })();
 })();
