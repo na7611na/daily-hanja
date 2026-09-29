@@ -80,6 +80,7 @@
       activity: [],    // 학습 활동 누적 기록
       writings: [],    // 짧은 글짓기 { date, idx, text }
       pending: [],     // 선생님 확인을 기다리는 애매한 답 { kind, grade, idx, m, s, date }
+      oldSeen: {},     // idx -> '지난 급수 복습'으로 마지막에 본 날짜
     };
   }
   function users() {
@@ -486,14 +487,28 @@
     return { newIdx, reviews, week, done: false };
   }
 
+  // 4 확인하기에 더하는 '지난 급수 복습': 아래 급수에서 앱으로 공부한 한자 1자 (숫자 한자는 너무 쉬워서 빼요)
+  const TOO_EASY = '一二三四五六七八九十';
+  function oldReviewIdx(exclude) {
+    const pool = S.order.filter((i) => C(i).gradeIdx < S.gradeIdx && !TOO_EASY.includes(C(i).h) && i !== exclude);
+    if (!pool.length) return null;
+    const seen = S.oldSeen || {};
+    // 틀렸던 한자 먼저, 그다음 가장 오래전에 복습한 한자
+    const missed = pool.filter((i) => S.missed.includes(i));
+    const from = missed.length ? missed : pool;
+    const oldest = from.map((i) => seen[i] || '').sort()[0];
+    return pick(from.filter((i) => (seen[i] || '') === oldest));
+  }
   function newCharSteps(i) {
     const c = C(i);
     const order = shuffle(c.words.map((_, k) => k));
+    const old = oldReviewIdx(i);
     return [
       { kind: 'learn', idx: i, stage: 'learn' },
       { kind: 'match', idx: i, stage: 'match', order: shuffle(c.words.map((_, k) => k)), done: [], selL: null, selR: null },
       { kind: 'cloze', idx: i, stage: 'cloze', order, filled: [], cur: order[0] },
       { kind: 'check', idx: i, stage: 'check', word: pick(c.words), m: '', s: '', graded: false },
+      ...(old === null ? [] : [{ kind: 'check', idx: old, stage: 'check', old: true, word: pick(C(old).words), m: '', s: '', graded: false }]),
       inferQuestion(i),
       { kind: 'write', idx: i, stage: 'write', text: '' },
     ];
@@ -1175,7 +1190,10 @@
   }
   function renderCheck(step) {
     const c = C(step.idx);
+    const next = session.steps[session.i + 1] || {};
+    const nextLabel = next.kind === 'check' && next.old ? '지난 급수 복습 →' : next.kind === 'infer' ? '추론하기 →' : '다음 →';
     return `<div class="card lesson-card">${stageHtml('check')}
+      ${step.old ? `<div class="redo-note">🔁 <b>지난 급수 복습</b> · ${c.gradeName}에서 공부한 한자예요</div>` : ''}
       ${wordQuestionHtml(c, step.word)}
       <form id="f" autocomplete="off">
         <div class="exam-inputs">
@@ -1183,7 +1201,7 @@
           <div><label for="s">음 (소리)</label><input id="s" lang="ko" value="${esc(step.s)}" ${step.graded ? 'readonly' : ''}></div>
         </div>
         <div id="fb">${step.graded ? checkFeedback(step) : ''}</div>
-        ${step.graded ? nextBtn('추론하기 →') : '<button class="btn block big" id="go">정답 확인</button>'}
+        ${step.graded ? nextBtn(nextLabel) : '<button class="btn block big" id="go">정답 확인</button>'}
       </form>
     </div>`;
   }
@@ -1221,7 +1239,8 @@
       step.ok = step.okM && step.okS;
       step.graded = true;
       score(step.ok, step.idx);
-      S.log[session.date] = Object.assign(S.log[session.date] || {}, { check: step.ok });
+      if (step.old) S.oldSeen = Object.assign(S.oldSeen || {}, { [step.idx]: session.date });
+      else S.log[session.date] = Object.assign(S.log[session.date] || {}, { check: step.ok });
       save();
       renderStep();
     });
