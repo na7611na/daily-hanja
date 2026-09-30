@@ -5,6 +5,9 @@
  *   students/{이름}  { name, pw, state, t, deleted }   학생마다 한 문서
  *   meta/teacher      { pw, t }                         선생님 비밀번호
  * t는 마지막으로 고친 시각입니다. 기기와 서버 가운데 더 나중에 고친 쪽을 따릅니다.
+ * 저장할 때는 '이 기기가 마지막으로 본 서버 기록(updateTime)'이 그대로일 때만 씁니다.
+ * 그 사이 다른 기기에서 기록이 바뀌었으면 덮어쓰지 않고 서버 기록을 받아 옵니다.
+ * (어제부터 켜 둔 기기의 옛 화면이 오늘 공부한 기록을 덮어쓰지 않게 하려는 것)
  * 인터넷이 안 되면 이 기기에 먼저 저장해 두고, 다음에 연결될 때 맞춥니다.
  * Firebase SDK 대신 Firestore REST API(fetch)를 씁니다. 파일이 가볍고, 학교망처럼
  * 오래 열어 두는 연결을 막는 곳에서도 잘 됩니다.
@@ -26,8 +29,9 @@
   const TEACHER_KEY = 'everyday-hanja:teacher';
   const STATE_PREFIX = 'everyday-hanja:v2:';
   const TIME_PREFIX = 'everyday-hanja:t:'; // 이름 → 이 기기에서 마지막으로 고친 시각
+  const SEEN_PREFIX = 'everyday-hanja:u:'; // 이름 → 이 기기가 마지막으로 본 서버 기록의 updateTime
   const TEACHER_TIME = 'everyday-hanja:t-teacher';
-  const TIMEOUT = 6000;
+  const TIMEOUT = 8000;
 
   const get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const set = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* 무시 */ } };
@@ -58,6 +62,7 @@
       const v = f[k];
       o[k] = 'booleanValue' in v ? v.booleanValue : 'integerValue' in v ? +v.integerValue : 'doubleValue' in v ? +v.doubleValue : v.stringValue;
     });
+    o.updateTime = doc && doc.updateTime;
     return o;
   }
   async function request(url, opts) {
@@ -66,19 +71,27 @@
     try {
       const r = await fetch(url, Object.assign({ signal: ctl.signal }, opts));
       if (r.status === 404) return null;
+      if (r.status === 409 || r.status === 400) {
+        const body = await r.text();
+        const err = new Error(`Firestore ${r.status}`);
+        err.conflict = r.status === 409 || body.includes('FAILED_PRECONDITION');
+        throw err;
+      }
       if (!r.ok) throw new Error(`Firestore ${r.status}`);
       return await r.json();
     } finally { clearTimeout(tm); }
   }
   const getDoc = async (path) => { const d = await request(docUrl(path)); return d ? fromDoc(d) : null; };
   // keepalive: 창을 닫는 순간에도 저장이 끝까지 가도록
-  const setDoc = (path, data) => request(docUrl(path), {
+  const setDoc = (path, data, cond = '') => request(docUrl(path) + cond, {
     method: 'PATCH', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(toFields(data)),
   });
 
   /* ---------- 서버 → 기기 ---------- */
+  const seenSet = (name, u) => { if (u) set(SEEN_PREFIX + name, u); else del(SEEN_PREFIX + name); };
   function applyStudent(d) {
     const name = d.name;
+    seenSet(name, d.updateTime);
     const list = json(USERS_KEY, []);
     const pws = json(PW_KEY, {});
     if (d.deleted) {
@@ -102,6 +115,8 @@
     const lt = localT(name);
     const hasLocal = json(USERS_KEY, []).includes(name);
     if (d && (d.t || 0) > lt) return applyStudent(d);
+    if (d && (d.t || 0) === lt) seenSet(name, d.updateTime); // 같은 기록
+    if (!d) seenSet(name, null);
     if (hasLocal && (!d || lt > (d.t || 0))) pushStudent(name);
     return false;
   }
@@ -153,18 +168,43 @@
     clearTimeout(timer);
     timer = setTimeout(flush, 800);
   }
+  const writing = {}; // 이름 → 진행 중인 저장 (한 학생의 저장은 차례대로)
+  const conflictListeners = [];
   function flush() {
     clearTimeout(timer);
     if (!db) return;
     waiting.forEach((name) => {
-      const pw = json(PW_KEY, {})[name];
-      const live = json(USERS_KEY, []).includes(name) && pw;
-      const data = live
-        ? { name, pw, state: get(STATE_PREFIX + name) || '', t: localT(name) || Date.now(), deleted: false }
-        : { name, pw: '', state: '', t: localT(name) || Date.now(), deleted: true };
-      setDoc(studentPath(name), data).catch((e) => console.warn('저장하지 못했어요', name, e));
+      writing[name] = (writing[name] || Promise.resolve()).then(() => writeStudent(name));
     });
     waiting.clear();
+  }
+  async function writeStudent(name) {
+    const pw = json(PW_KEY, {})[name];
+    const live = json(USERS_KEY, []).includes(name) && pw;
+    const data = live
+      ? { name, pw, state: get(STATE_PREFIX + name) || '', t: localT(name) || Date.now(), deleted: false }
+      : { name, pw: '', state: '', t: localT(name) || Date.now(), deleted: true };
+    const seen = get(SEEN_PREFIX + name);
+    const cond = seen ? `&currentDocument.updateTime=${encodeURIComponent(seen)}` : '&currentDocument.exists=false';
+    try {
+      const r = await setDoc(studentPath(name), data, cond);
+      if (r && r.updateTime) seenSet(name, r.updateTime);
+    } catch (e) {
+      if (!e.conflict) {
+        // 인터넷이 잠깐 끊긴 것: 조금 뒤에 다시 저장해요.
+        console.warn('저장하지 못했어요. 잠시 뒤 다시 저장해요.', name, e);
+        waiting.add(name);
+        clearTimeout(timer);
+        timer = setTimeout(flush, 10000);
+        return;
+      }
+      // 다른 기기에서 먼저 바뀐 기록: 서버 기록을 따라요.
+      const d = await getDoc(studentPath(name)).catch(() => null);
+      if (d) applyStudent(d);
+      else seenSet(name, null);
+      lastPw = json(PW_KEY, {});
+      conflictListeners.forEach((f) => f(name));
+    }
   }
   function pushTeacher() {
     if (!db) return;
@@ -202,6 +242,7 @@
     on: !!db,
     pullAll: safe(pullAll),
     pullOne: safe(pullOne),
+    onConflict: (f) => conflictListeners.push(f),
     changed,
     flush,
   };

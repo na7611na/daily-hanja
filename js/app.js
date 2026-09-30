@@ -56,7 +56,7 @@
 
   /* ================= 저장 (학생별) ================= */
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-  const cloud = window.Cloud || { on: false, pullAll: async () => false, pullOne: async () => false, changed() {}, flush() {} };
+  const cloud = window.Cloud || { on: false, pullAll: async () => false, pullOne: async () => false, onConflict() {}, changed() {}, flush() {} };
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 무시 */ } cloud.changed(k); }
   function lsDel(k) { try { localStorage.removeItem(k); } catch (e) { /* 무시 */ } cloud.changed(k); }
 
@@ -81,6 +81,7 @@
       writings: [],    // 짧은 글짓기 { date, idx, text }
       pending: [],     // 선생님 확인을 기다리는 애매한 답 { kind, grade, idx, m, s, date }
       oldSeen: {},     // idx -> '지난 급수 복습'으로 마지막에 본 날짜
+      oldReviewDate: null, // 지난 급수 복습을 마지막으로 한 날짜 (하루 한 번)
     };
   }
   function users() {
@@ -457,6 +458,7 @@
     write: { n: 6, t: '적용하기', sub: '짧은 글짓기', e: '✏️', c: 's5' },
     week: { n: 0, t: '일주일 복습', e: '⭐', c: 'week' },
     free: { n: 0, t: '자유 복습', e: '🎲', c: 'review' },
+    old: { n: 0, t: '지난 급수 복습', e: '🔁', c: 'review' },
   };
   function stageHtml(key) {
     const s = STAGES[key];
@@ -487,28 +489,30 @@
     return { newIdx, reviews, week, done: false };
   }
 
-  // 4 확인하기에 더하는 '지난 급수 복습': 아래 급수에서 앱으로 공부한 한자 1자 (숫자 한자는 너무 쉬워서 빼요)
+  // 입장하면 하루 한 번 나오는 '지난 급수 복습': 아래 급수에서 앱으로 공부한 한자 3자 (숫자 한자는 너무 쉬워서 빼요)
   const TOO_EASY = '一二三四五六七八九十';
-  function oldReviewIdx(exclude) {
-    const pool = S.order.filter((i) => C(i).gradeIdx < S.gradeIdx && !TOO_EASY.includes(C(i).h) && i !== exclude);
-    if (!pool.length) return null;
+  const OLD_REVIEW_N = 3;
+  function oldReviewList(n) {
+    const pool = S.order.filter((i) => C(i).gradeIdx < S.gradeIdx && !TOO_EASY.includes(C(i).h));
     const seen = S.oldSeen || {};
-    // 틀렸던 한자 먼저, 그다음 가장 오래전에 복습한 한자
-    const missed = pool.filter((i) => S.missed.includes(i));
-    const from = missed.length ? missed : pool;
-    const oldest = from.map((i) => seen[i] || '').sort()[0];
-    return pick(from.filter((i) => (seen[i] || '') === oldest));
+    // 틀렸던 한자 먼저, 그다음 가장 오래전에 복습한 한자 (같으면 무작위)
+    const rank = (i) => (S.missed.includes(i) ? '0' : '1') + (seen[i] || '');
+    return shuffle(pool).sort((a, b) => (rank(a) < rank(b) ? -1 : rank(a) > rank(b) ? 1 : 0)).slice(0, n);
+  }
+  const oldReviewDue = () => S.oldReviewDate !== fmt(today()) && oldReviewList(1).length > 0;
+  function buildOldReview() {
+    const steps = oldReviewList(OLD_REVIEW_N).map((i) => ({ kind: 'check', idx: i, stage: 'old', old: true, word: pick(C(i).words), m: '', s: '', graded: false }));
+    steps.push({ kind: 'done' });
+    return { type: 'oldreview', steps, i: 0, correct: 0, total: 0, started: Date.now() };
   }
   function newCharSteps(i) {
     const c = C(i);
     const order = shuffle(c.words.map((_, k) => k));
-    const old = oldReviewIdx(i);
     return [
       { kind: 'learn', idx: i, stage: 'learn' },
       { kind: 'match', idx: i, stage: 'match', order: shuffle(c.words.map((_, k) => k)), done: [], selL: null, selR: null },
       { kind: 'cloze', idx: i, stage: 'cloze', order, filled: [], cur: order[0] },
       { kind: 'check', idx: i, stage: 'check', word: pick(c.words), m: '', s: '', graded: false },
-      ...(old === null ? [] : [{ kind: 'check', idx: old, stage: 'check', old: true, word: pick(C(old).words), m: '', s: '', graded: false }]),
       inferQuestion(i),
       { kind: 'write', idx: i, stage: 'write', text: '' },
     ];
@@ -613,6 +617,8 @@
       logActivity({ type: 'relearn', list: S.relearn.slice(), ...quiz });
       S.relearn = [];
       S.phase = 'exam';
+    } else if (session.type === 'oldreview') {
+      logActivity({ type: 'oldreview', ...quiz });
     } else if (session.type === 'weekly') {
       S.weekly[session.week] = true;
       logActivity({ type: 'weekly', ...quiz });
@@ -909,6 +915,8 @@
 
   function renderHome() {
     setTab('home');
+    // 그날 처음 들어오면 지난 급수 복습부터 해요.
+    if (oldReviewDue()) { goHash('#/oldreview'); return; }
     syncPhase();
     const t = today();
     let main = '';
@@ -977,6 +985,13 @@
       if (!session || session.type !== 'relearn') {
         if (S.phase !== 'relearn' || !S.relearn.length) { location.hash = '#/'; return; }
         session = buildRelearn();
+      }
+    } else if (kind === 'oldreview') {
+      if (!session || session.type !== 'oldreview') {
+        if (!oldReviewDue()) { location.hash = '#/'; return; }
+        session = buildOldReview();
+        S.oldReviewDate = fmt(t); // 그만두어도 오늘은 다시 나오지 않아요
+        save();
       }
     } else if (kind === 'weekly') {
       if (learnedInWeek(t).length === 0) { location.hash = '#/'; return; }
@@ -1191,9 +1206,9 @@
   function renderCheck(step) {
     const c = C(step.idx);
     const next = session.steps[session.i + 1] || {};
-    const nextLabel = next.kind === 'check' && next.old ? '지난 급수 복습 →' : next.kind === 'infer' ? '추론하기 →' : '다음 →';
-    return `<div class="card lesson-card">${stageHtml('check')}
-      ${step.old ? `<div class="redo-note">🔁 <b>지난 급수 복습</b> · ${c.gradeName}에서 공부한 한자예요</div>` : ''}
+    const nextLabel = next.kind === 'check' ? '다음 문제 →' : next.kind === 'infer' ? '추론하기 →' : '다음 →';
+    return `<div class="card lesson-card">${stageHtml(step.stage)}
+      ${step.old ? `<p class="small muted center">${c.gradeName}에서 공부한 한자예요</p>` : ''}
       ${wordQuestionHtml(c, step.word)}
       <form id="f" autocomplete="off">
         <div class="exam-inputs">
@@ -1239,7 +1254,7 @@
       step.ok = step.okM && step.okS;
       step.graded = true;
       score(step.ok, step.idx);
-      if (step.old) S.oldSeen = Object.assign(S.oldSeen || {}, { [step.idx]: session.date });
+      if (step.old) S.oldSeen = Object.assign(S.oldSeen || {}, { [step.idx]: fmt(today()) });
       else S.log[session.date] = Object.assign(S.log[session.date] || {}, { check: step.ok });
       save();
       renderStep();
@@ -1436,6 +1451,7 @@
     if (session.type === 'extra') title = '한 자 더 배웠어요!';
     if (session.type === 'weekly') title = '일주일 복습 끝!';
     if (session.type === 'review') title = '복습 끝!';
+    if (session.type === 'oldreview') { title = '지난 급수 복습 끝!'; msg = '틀린 한자는 다음 복습에 다시 나와요. 이제 오늘 공부하러 가요!'; }
     if (session.type === 'relearn') {
       title = '다시 보기 끝!';
       msg = `이제 ${g.name} 급수 시험을 다시 볼 차례예요. 100점에 도전해요!`;
@@ -1515,6 +1531,7 @@
       }
       if (a.type === 'weekly') return `🗓 일주일 복습 · 퀴즈 ${a.correct}/${a.total}`;
       if (a.type === 'review') return `🔁 자유 복습 · 퀴즈 ${a.correct}/${a.total}`;
+      if (a.type === 'oldreview') return `🔁 지난 급수 복습 · ${a.correct}/${a.total}`;
       if (a.type === 'exam') return `🏆 ${a.grade} 급수 시험 ${a.score}점 ${a.passed ? '(통과)' : ''}`;
       if (a.type === 'accept') return `👩‍🏫 선생님이 <span class="hanja">${C(a.idx).h}</span>의 답을 인정했어요`;
       if (a.type === 'level') return `🧪 ${a.grade} 레벨테스트 · 아는 한자 ${a.known}/${a.total}`;
@@ -1826,7 +1843,7 @@
         <h2>설정</h2>
         <div class="setting">
           <div class="txt"><b>학생</b><div class="small muted">${esc(user)}</div></div>
-          <button class="btn ghost" id="switch">학생 바꾸기</button>
+          <button class="btn ghost" id="switch">로그아웃</button>
         </div>
         <form class="setting pw-form" id="pwf" autocomplete="off">
           <div class="txt"><b>비밀번호 바꾸기</b>
@@ -2071,8 +2088,9 @@
     const who = document.getElementById('who');
     who.textContent = user ? `👤 ${user}` : '';
     who.hidden = !user;
+    document.getElementById('logout').hidden = !user;
     document.querySelectorAll('.modal-back').forEach((m) => m.remove());
-    if (!['lesson', 'weekly', 'review', 'extra', 'relearn'].includes(parts[0])) stopTimer();
+    if (!['lesson', 'weekly', 'review', 'extra', 'relearn', 'oldreview'].includes(parts[0])) stopTimer();
     document.body.classList.remove('in-lesson', 'logged-out');
     window.scrollTo(0, 0);
 
@@ -2091,6 +2109,7 @@
       case 'relearn': startLesson('relearn'); break;
       case 'weekly': startLesson('weekly'); break;
       case 'review': startLesson('review'); break;
+      case 'oldreview': startLesson('oldreview'); break;
       case 'level': startTest('level'); break;
       case 'test': startTest('exam'); break;
       case 'list': renderList(); break;
@@ -2102,13 +2121,22 @@
   }
 
   document.getElementById('who').addEventListener('click', () => { location.hash = '#/records'; });
+  document.getElementById('logout').addEventListener('click', () => {
+    if (!confirm('로그아웃할까요?')) return;
+    stopTimer();
+    cloud.flush();
+    logout();
+    goHash('#/');
+  });
   window.addEventListener('hashchange', route);
 
   // 공부 중이 아닐 때 다시 화면으로 돌아오면, 다른 기기에서 공부한 기록을 받아 와요.
-  const busyScreens = ['lesson', 'weekly', 'review', 'extra', 'relearn', 'level', 'test'];
+  const busyScreens = ['lesson', 'weekly', 'review', 'extra', 'relearn', 'oldreview', 'level', 'test'];
   function onScreen() { return location.hash.replace(/^#\/?/, '').split('/')[0]; }
-  document.addEventListener('visibilitychange', async () => {
+  let lastRefresh = 0;
+  async function refresh() {
     if (document.visibilityState !== 'visible' || busyScreens.includes(onScreen())) return;
+    lastRefresh = Date.now();
     const was = user;
     const changed = onScreen() === 'teacher' ? await cloud.pullAll() : await cloud.pullOne(user);
     if (changed && !busyScreens.includes(onScreen())) {
@@ -2116,6 +2144,21 @@
       if (user !== was) session = null;
       route();
     }
+  }
+  document.addEventListener('visibilitychange', refresh);
+  window.addEventListener('focus', () => { if (Date.now() - lastRefresh > 5000) refresh(); });
+  // 켜 둔 채로 두는 교실 컴퓨터도 1분마다 새 기록을 확인해요.
+  setInterval(() => { if (user) refresh(); }, 60000);
+
+  // 다른 기기에서 먼저 바뀐 기록이 있어 이 기기의 저장을 멈추고 서버 기록을 받아 온 경우
+  cloud.onConflict((name) => {
+    if (name !== user) return;
+    stopTimer();
+    session = null;
+    restoreUser();
+    alert('다른 기기에서 공부한 기록이 있어서 그 기록으로 바꿨어요.');
+    location.hash = '#/';
+    route();
   });
 
   // 처음 열 때: 서버의 기록을 받아 온 뒤 화면을 그려요.

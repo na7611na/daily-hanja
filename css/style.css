@@ -89,6 +89,13 @@ mark { background: var(--mark); color: inherit; border-radius: 6px; padding: 0 3
   max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+.who-row { display: flex; gap: 6px; align-items: center; }
+.logout {
+  background: transparent; border: 1.5px solid var(--line); border-radius: 999px; padding: 1px 9px; cursor: pointer;
+  font-size: 12px; font-weight: 700; color: var(--ink-soft); font-family: inherit;
+}
+.logout:hover { border-color: var(--accent); color: var(--accent-dark); }
+.logout[hidden] { display: none; }
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
   display: grid; grid-template-columns: repeat(5, 1fr);
