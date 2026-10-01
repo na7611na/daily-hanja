@@ -471,7 +471,8 @@
     const t = today();
     const ds = fmt(t);
     const entry = S.log[ds];
-    if (entry) return entry;
+    // 오늘 학습 계획이 이미 있으면 그대로 (계획 없이 결과만 있는 예전 기록은 새로 계획해요)
+    if (entry && entry.reviews) return entry;
     const newIdx = nextNewIdx();
     const reviews = [];
     const prev = lastLearnedBefore(ds);
@@ -872,7 +873,7 @@
     }
     const plan = planToday();
     const c = C(plan.newIdx);
-    const started = !!entry;
+    const started = !!(entry && entry.reviews);
     const rows = [];
     if (plan.reviews.length) rows.push(['🔁', '', '어제 배운 한자 복습']);
     ['learn', 'match', 'cloze', 'check', 'infer', 'write'].forEach((k) => {
@@ -1257,7 +1258,8 @@
       step.graded = true;
       score(step.ok, step.idx);
       if (step.old) S.oldSeen = Object.assign(S.oldSeen || {}, { [step.idx]: fmt(today()) });
-      else S.log[session.date] = Object.assign(S.log[session.date] || {}, { check: step.ok });
+      // 오늘 학습 기록에만 남겨요 (급수 시험 뒤 '다시 보기'의 확인하기는 학습 계획이 아니에요)
+      else if (S.log[session.date] && session.plan && step.idx === session.plan.newIdx) S.log[session.date].check = step.ok;
       save();
       renderStep();
     });
@@ -1366,7 +1368,7 @@
       step.chosen = step.options[+b.dataset.k].read;
       const ok = step.chosen === step.answer;
       score(ok, step.idx);
-      S.log[session.date] = Object.assign(S.log[session.date] || {}, { infer: ok });
+      if (S.log[session.date] && session.plan && step.idx === session.plan.newIdx) S.log[session.date].infer = ok;
       save();
       renderStep();
     }));
