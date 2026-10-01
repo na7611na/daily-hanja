@@ -736,7 +736,7 @@
       <div class="card hero login">
         <div class="login-mark">漢</div>
         <h1>매일 한자</h1>
-        <p class="slogan">매일 5분,<br><b>한자를 알면 어휘가 보인다</b></p>
+        <p class="slogan">매일 5분<br><b>한자를 알면 어휘가 보인다</b></p>
         <div class="seg"><button class="${isNew ? '' : 'on'}" data-mode="in">입장하기</button><button class="${isNew ? 'on' : ''}" data-mode="new">처음 왔어요</button></div>
         <form id="login" autocomplete="off">
           <label for="name">이름(아이디)</label>
@@ -1593,7 +1593,10 @@
     const pct = (t.i / t.items.length) * 100;
     const words = it.words.map((k) => {
       const w = c.words[k];
-      return `<span class="tw"><span class="hanja">${hl(w.word, c.h)}</span><small>(${w.read})</small></span>`;
+      // 어휘 읽기에서 이 한자의 음만 빨간색
+      const { k: pos } = targetPos(c, w);
+      const read = [...plainRead(w)].map((ch, j) => (j === pos ? `<b class="tw-on">${ch}</b>` : ch)).join('');
+      return `<span class="tw"><span class="hanja">${hl(w.word, c.h)}</span><small>(${read})</small></span>`;
     }).join('');
     $app.innerHTML = `
       <div class="lesson-head">
@@ -1604,8 +1607,10 @@
       <div class="card lesson-card">
         <div class="stage stage-${t.kind === 'level' ? 's3' : 'week'}"><span class="stage-e">${t.kind === 'level' ? '🧪' : '🏆'}</span><b>${g.name} ${testName(t)}</b></div>
         <div class="quiz-q">
-          <div class="test-hanja">${c.h}</div>
-          <div class="test-words">${words}</div>
+          <div class="test-pair">
+            <div class="test-hanja">${c.h}</div>
+            <div class="test-words">${words}</div>
+          </div>
           <div class="prompt">이 한자의 <b>뜻(훈)</b>과 <b>음</b>을 쓰세요.</div>
         </div>
         <form id="f" autocomplete="off">
