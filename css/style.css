@@ -547,11 +547,8 @@ ol.plain li { margin: 4px 0; }
   .test-pair .test-hanja { width: 116px; height: 116px; font-size: 80px; border-radius: 26px; }
   .test-words { font-size: 22px; }
   .tw { padding: 4px 10px; }
-  .tw small { font-size: 16px; }
 }
 .tw { display: inline-flex; align-items: baseline; gap: 2px; padding: 4px 12px; border-radius: 14px; background: var(--s2-soft); }
-.tw .hanja em { font-style: normal; color: var(--accent-dark); }
-.tw small { font-size: 17px; color: var(--ink-soft); }
 .tw-dot { color: var(--ink-soft); }
 .wl-body { flex: 1; }
 .cell-btn.known { border-color: var(--blue); background: var(--blue-soft); }

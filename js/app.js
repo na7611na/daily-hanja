@@ -179,7 +179,6 @@
     }
     return `${c.meanings.join(', ')} ${c.sounds.join(', ')}`;
   }
-  const hl = (text, h) => text.split(h).join(`<em>${h}</em>`);
   const shuffle = (a) => {
     const x = a.slice();
     for (let i = x.length - 1; i > 0; i--) {
@@ -1596,7 +1595,7 @@
       // 어휘 읽기에서 이 한자의 음만 빨간색
       const { k: pos } = targetPos(c, w);
       const read = [...plainRead(w)].map((ch, j) => (j === pos ? `<b class="tw-on">${ch}</b>` : ch)).join('');
-      return `<span class="tw"><span class="hanja">${hl(w.word, c.h)}</span><small>(${read})</small></span>`;
+      return `<span class="tw">${read}</span>`; // 한글만 보여 줘요
     }).join('');
     $app.innerHTML = `
       <div class="lesson-head">
