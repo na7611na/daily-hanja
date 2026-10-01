@@ -128,6 +128,7 @@
 
   let user = null;
   let S = blankState();
+  let justEntered = true; // 앱을 막 열었거나 입장한 참 (지난 급수 복습을 띄울지 볼 때)
   function restoreUser() {
     user = lsGet(CURRENT_KEY);
     if (user && (!users().includes(user) || !hasPassword(user))) user = null;
@@ -151,6 +152,7 @@
     lsDel(stateKey(name));
   }
   function login(name) {
+    justEntered = true;
     user = name;
     lsSet(CURRENT_KEY, name);
     S = loadState(name);
@@ -912,10 +914,11 @@
     }).join('<i></i>')}</div>`;
   }
 
-  function renderHome() {
+  function renderHome(entering = false) {
     setTab('home');
-    // 그날 처음 들어오면 지난 급수 복습부터 해요.
-    if (oldReviewDue()) { goHash('#/oldreview'); return; }
+    // 앱을 열거나 입장했을 때만, 그날 처음이면 지난 급수 복습부터 해요.
+    // (시험·학습을 마치고 '홈으로'를 누를 때는 홈으로 가요)
+    if (entering && oldReviewDue()) { goHash('#/oldreview'); return; }
     syncPhase();
     const t = today();
     let main = '';
@@ -2107,6 +2110,8 @@
       return;
     }
     if (!user) { stopTimer(); renderLogin(); return; }
+    const entering = justEntered;
+    justEntered = false;
     switch (parts[0]) {
       case 'lesson': startLesson('lesson'); break;
       case 'extra': startLesson('extra'); break;
@@ -2120,7 +2125,7 @@
       case 'records': renderRecords(); break;
       case 'exam': renderExamHome(); break;
       case 'settings': renderSettings(); break;
-      default: renderHome();
+      default: renderHome(entering);
     }
   }
 
