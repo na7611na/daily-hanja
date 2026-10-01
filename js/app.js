@@ -81,7 +81,8 @@
       writings: [],    // 짧은 글짓기 { date, idx, text }
       pending: [],     // 선생님 확인을 기다리는 애매한 답 { kind, grade, idx, m, s, date }
       oldSeen: {},     // idx -> '지난 급수 복습'으로 마지막에 본 날짜
-      oldReviewDate: null, // 지난 급수 복습을 마지막으로 한 날짜 (하루 한 번)
+      oldReviewDate: null, // 입장 복습을 마지막으로 한 날짜 (하루 한 번)
+      yReviewDate: null,   // 입장 복습에서 어제 배운 한자 복습까지 한 날짜
     };
   }
   function users() {
@@ -501,9 +502,27 @@
     const rank = (i) => (S.missed.includes(i) ? '0' : '1') + (seen[i] || '');
     return shuffle(pool).sort((a, b) => (rank(a) < rank(b) ? -1 : rank(a) > rank(b) ? 1 : 0)).slice(0, n);
   }
-  const oldReviewDue = () => S.oldReviewDate !== fmt(today()) && oldReviewList(1).length > 0;
+  // 입장할 때 함께 하는 '어제 배운 한자 복습'(+ 틀렸던 한자): 평일, 공부 중이고 오늘 학습을 아직 안 했을 때
+  function yesterdayReviews() {
+    const t = today();
+    if (S.phase !== 'study' || !isWeekday(t)) return [];
+    const e = S.log[fmt(t)];
+    if (e && (e.done || (e.reviews && S.learned[e.newIdx] === fmt(t)))) return []; // 오늘 학습을 이미 시작했으면 빼요
+    return planToday().reviews;
+  }
+  // 그날 처음 입장하면 지난 급수 복습 + 어제 배운 한자 복습을 바로 해요 (하루 한 번)
+  const oldReviewDue = () => S.oldReviewDate !== fmt(today()) && (oldReviewList(1).length > 0 || yesterdayReviews().length > 0);
   function buildOldReview() {
-    const steps = oldReviewList(OLD_REVIEW_N).map((i) => ({ kind: 'check', idx: i, stage: 'old', old: true, word: pick(C(i).words), m: '', s: '', graded: false }));
+    const ds = fmt(today());
+    const reviews = yesterdayReviews();
+    const old = oldReviewList(OLD_REVIEW_N + reviews.length).filter((i) => !reviews.includes(i)).slice(0, OLD_REVIEW_N);
+    const steps = old.map((i) => ({ kind: 'check', idx: i, stage: 'old', old: true, word: pick(C(i).words), m: '', s: '', graded: false }));
+    reviews.forEach((i, k) => {
+      const stage = k === 0 ? 'review' : 'missed';
+      steps.push(soundQuestion(i, stage));
+      if (k === 0) steps.push(meaningQuestion(i, stage));
+    });
+    if (reviews.length) S.yReviewDate = ds; // 오늘 학습에서는 어제 복습을 다시 하지 않아요
     steps.push({ kind: 'done' });
     return { type: 'oldreview', steps, i: 0, correct: 0, total: 0, started: Date.now() };
   }
@@ -541,7 +560,8 @@
   function buildLesson() {
     const plan = planToday();
     const steps = [];
-    plan.reviews.forEach((i, k) => {
+    // 입장할 때 어제 배운 한자 복습을 이미 했으면 바로 오늘의 한자부터
+    if (S.yReviewDate !== fmt(today())) plan.reviews.forEach((i, k) => {
       const stage = k === 0 ? 'review' : 'missed';
       steps.push(soundQuestion(i, stage));
       if (k === 0) steps.push(meaningQuestion(i, stage));
@@ -875,7 +895,7 @@
     const c = C(plan.newIdx);
     const started = !!(entry && entry.reviews);
     const rows = [];
-    if (plan.reviews.length) rows.push(['🔁', '', '어제 배운 한자 복습']);
+    if (plan.reviews.length && S.yReviewDate !== fmt(t)) rows.push(['🔁', '', '어제 배운 한자 복습']);
     ['learn', 'match', 'cloze', 'check', 'infer', 'write'].forEach((k) => {
       const st = STAGES[k];
       rows.push([st.e, st.n, `${st.t}${st.sub ? ` <span class="muted">· ${st.sub}</span>` : ''}`, st.c]);
@@ -1455,7 +1475,7 @@
     if (session.type === 'extra') title = '한 자 더 배웠어요!';
     if (session.type === 'weekly') title = '일주일 복습 끝!';
     if (session.type === 'review') title = '복습 끝!';
-    if (session.type === 'oldreview') { title = '지난 급수 복습 끝!'; msg = '틀린 한자는 다음 복습에 다시 나와요. 이제 오늘 공부하러 가요!'; }
+    if (session.type === 'oldreview') { title = '복습 끝!'; msg = '틀린 한자는 다음 복습에 다시 나와요. 이제 오늘 공부하러 가요!'; }
     if (session.type === 'relearn') {
       title = '다시 보기 끝!';
       msg = `이제 ${g.name} 급수 시험을 다시 볼 차례예요. 100점에 도전해요!`;
@@ -1535,7 +1555,7 @@
       }
       if (a.type === 'weekly') return `🗓 일주일 복습 · 퀴즈 ${a.correct}/${a.total}`;
       if (a.type === 'review') return `🔁 자유 복습 · 퀴즈 ${a.correct}/${a.total}`;
-      if (a.type === 'oldreview') return `🔁 지난 급수 복습 · ${a.correct}/${a.total}`;
+      if (a.type === 'oldreview') return `🔁 입장 복습(지난 급수·어제 배운 한자) · ${a.correct}/${a.total}`;
       if (a.type === 'exam') return `🏆 ${a.grade} 급수 시험 ${a.score}점 ${a.passed ? '(통과)' : ''}`;
       if (a.type === 'accept') return `👩‍🏫 선생님이 <span class="hanja">${C(a.idx).h}</span>의 답을 인정했어요`;
       if (a.type === 'level') return `🧪 ${a.grade} 레벨테스트 · 아는 한자 ${a.known}/${a.total}`;
