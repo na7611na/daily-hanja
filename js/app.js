@@ -83,6 +83,8 @@
       oldSeen: {},     // idx -> '지난 급수 복습'으로 마지막에 본 날짜
       oldReviewDate: null, // 입장 복습을 마지막으로 한 날짜 (하루 한 번)
       yReviewDate: null,   // 입장 복습에서 어제 배운 한자 복습까지 한 날짜
+      time: {},        // 날짜 -> 그날 실제로 공부한 시간(초)
+      cheerDate: null, // 5분 격려를 보여 준 날짜
     };
   }
   function users() {
@@ -1028,15 +1030,65 @@
     document.body.classList.add('in-lesson');
     renderStep();
     stopTimer();
-    timerId = setInterval(() => {
-      const el = document.getElementById('timer');
-      if (el && session) el.textContent = elapsed(session.started);
-    }, 1000);
   }
 
-  function elapsed(from) {
-    const s = Math.floor((Date.now() - from) / 1000);
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  /* ================= 학습 시간 ================= */
+  // 공부 화면(학습·복습·레벨테스트·급수 시험)을 실제로 보고 있는 시간만 셉니다.
+  // 다른 창으로 가거나 화면이 꺼졌을 때, 2분 동안 아무 입력이 없을 때는 세지 않아요.
+  const STUDY_SCREENS = ['lesson', 'extra', 'relearn', 'weekly', 'review', 'oldreview', 'level', 'test'];
+  const IDLE_LIMIT = 120 * 1000;
+  const CHEER_AT = 5 * 60;
+  const CHEERS = [
+    '벌써 5분이 넘었어요! 꾸준히 하는 힘이 진짜 실력이 돼요.',
+    '5분 넘게 집중했어요! 오늘도 한 걸음 더 자랐어요.',
+    '대단해요! 끝까지 해내는 모습이 정말 멋져요.',
+    '5분을 넘겼어요! 이렇게 조금씩 쌓이면 어휘가 쑥쑥 늘어요.',
+    '오늘 공부한 시간이 내일의 실력이 돼요. 계속 힘내요!',
+    '와, 5분 넘게 공부했어요! 한자 박사가 되는 길에 성큼 다가섰어요.',
+  ];
+  let lastInput = Date.now();
+  ['pointerdown', 'keydown', 'touchstart', 'input'].forEach((ev) => document.addEventListener(ev, () => { lastInput = Date.now(); }, true));
+  const fmtTime = (sec) => {
+    sec = Math.round(sec || 0);
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s2 = sec % 60;
+    return h ? `${h}시간 ${m}분` : m ? `${m}분${s2 ? ` ${s2}초` : ''}` : `${s2}초`;
+  };
+  const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  const todaySecs = (st = S) => (st.time || {})[fmt(today())] || 0;
+  const totalSecs = (st = S, upTo = null) => Object.keys(st.time || {}).filter((d) => !upTo || d <= upTo).reduce((n, d) => n + st.time[d], 0);
+  const cheerOf = (ds) => CHEERS[[...ds].reduce((n, ch) => n + ch.charCodeAt(0), 0) % CHEERS.length];
+  let unsaved = 0;
+  setInterval(() => {
+    const screen = location.hash.replace(/^#\/?/, '').split('/')[0];
+    if (!user || !STUDY_SCREENS.includes(screen) || document.visibilityState !== 'visible') return;
+    if (Date.now() - lastInput > IDLE_LIMIT) return;
+    const ds = fmt(today());
+    S.time = S.time || {};
+    S.time[ds] = (S.time[ds] || 0) + 1;
+    document.querySelectorAll('.study-clock').forEach((el) => { el.textContent = clock(S.time[ds]); });
+    if (S.time[ds] >= CHEER_AT && S.cheerDate !== ds) {
+      S.cheerDate = ds;
+      showCheer(cheerOf(ds));
+      save();
+      unsaved = 0;
+    } else if (++unsaved >= 15) { save(); unsaved = 0; }
+  }, 1000);
+  function showCheer(text) {
+    document.querySelectorAll('.cheer-toast').forEach((x) => x.remove());
+    const el = document.createElement('div');
+    el.className = 'cheer-toast';
+    el.innerHTML = `<span class="ct-ico">🌟</span><span>${text}</span>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.classList.add('out'), 5000);
+    setTimeout(() => el.remove(), 5600);
+  }
+  const studyClock = () => `<span class="timer" title="오늘 공부한 시간">⏱ <span class="study-clock">${clock(todaySecs())}</span></span>`;
+  // 끝 화면에 보여 주는 오늘 학습 시간과 격려
+  function todayTimeHtml() {
+    const sec = todaySecs();
+    const ds = fmt(today());
+    return `<div class="time-box">⏱ 오늘 공부한 시간 <b>${fmtTime(sec)}</b>
+      ${sec >= CHEER_AT ? `<div class="cheer">🌟 ${cheerOf(ds)}</div>` : ''}</div>`;
   }
 
   function nextStep() {
@@ -1064,7 +1116,7 @@
       <div class="lesson-head">
         <button class="close-x" id="quit" aria-label="그만하기">✕</button>
         <div class="progress"><span style="width:${pct}%"></span></div>
-        <span class="timer" id="timer">${elapsed(session.started)}</span>
+        ${studyClock()}
       </div>${trackerHtml(step)}`;
     const R = {
       learn: renderLearn, match: renderMatch, cloze: renderCloze, check: renderCheck, write: renderWrite,
@@ -1460,8 +1512,6 @@
     finishSession();
     if (S.phase === 'study' && !queueLeft()) { S.phase = 'exam'; save(); }
     document.body.classList.remove('in-lesson');
-    const secs = Math.floor((Date.now() - session.started) / 1000);
-    const mins = Math.max(1, Math.round(secs / 60));
     const g = curGrade();
     let title = '오늘 학습 끝!';
     let msg = '잘했어요! 틀린 한자는 다음 복습에 다시 나와요.';
@@ -1501,7 +1551,8 @@
       <div class="emoji">${session.failed ? '💪' : '🏅'}</div>
       <h2>${title}</h2>
       ${redoNote}
-      <p>${session.total ? `문제 <b>${session.correct} / ${session.total}</b> 정답 · ` : ''}약 ${mins}분</p>
+      ${session.total ? `<p>문제 <b>${session.correct} / ${session.total}</b> 정답</p>` : ''}
+      ${todayTimeHtml()}
       ${writing}
       <p class="muted">${msg}</p>
       ${session.type === 'lesson' ? `<p class="streak">🔥 연속 학습 <b>${streak()}일</b></p>` : ''}
@@ -1549,6 +1600,7 @@
     const byDate = {};
     S.activity.forEach((a) => { (byDate[a.date] = byDate[a.date] || []).push(a); });
     S.writings.forEach((w) => { (byDate[w.date] = byDate[w.date] || []).push({ type: 'writing', ...w }); });
+    Object.keys(S.time || {}).forEach((d) => { byDate[d] = byDate[d] || []; });
     const dates = Object.keys(byDate).sort().reverse();
     const label = (a) => {
       if (a.type === 'lesson') {
@@ -1565,7 +1617,7 @@
       if (a.type === 'writing') return `✏️ 글짓기: “${esc(a.text)}”`;
       return '';
     };
-    const timeline = dates.map((d) => `<div class="tl-day"><div class="tl-date">${shortDate(d)}</div>
+    const timeline = dates.map((d) => `<div class="tl-day"><div class="tl-date">${shortDate(d)}${(S.time || {})[d] ? `<span class="tl-time">⏱ ${fmtTime(S.time[d])}</span>` : ''}</div>
       <ul>${byDate[d].map((a) => `<li>${label(a)}</li>`).join('')}</ul></div>`).join('');
 
     $app.innerHTML = `
@@ -1576,6 +1628,10 @@
           <div><b>${S.order.length}</b><span>공부한 한자</span></div>
           <div><b>${S.writings.length}</b><span>글짓기</span></div>
           <div><b>${quizT ? Math.round((quizC / quizT) * 100) : 0}%</b><span>퀴즈 정답률</span></div>
+        </div>
+        <div class="stats" style="grid-template-columns:repeat(2,1fr);margin-top:10px">
+          <div><b>${fmtTime(todaySecs())}</b><span>오늘 공부한 시간</span></div>
+          <div><b>${fmtTime(totalSecs())}</b><span>모두 합친 시간</span></div>
         </div>
       </div>
       <div class="card">
@@ -1628,7 +1684,7 @@
       <div class="lesson-head">
         <button class="close-x" id="quit" aria-label="나중에 이어서 하기">✕</button>
         <div class="progress"><span style="width:${pct}%"></span></div>
-        <span class="timer">${t.i + 1} / ${t.items.length}</span>
+        <span class="timer">${t.i + 1} / ${t.items.length}</span>${studyClock()}
       </div>
       <div class="card lesson-card">
         <div class="stage stage-${t.kind === 'level' ? 's3' : 'week'}"><span class="stage-e">${t.kind === 'level' ? '🧪' : '🏆'}</span><b>${g.name} ${testName(t)}</b></div>
@@ -1844,7 +1900,7 @@
         : `<div class="emoji">💪</div><h2>틀린 한자 ${wrong.length}자 다시 보기</h2>
            <p>틀린 한자를 다시 익히고 ${g.name} 급수 시험을 다시 봐요.</p><button class="btn block big" data-go="#/relearn">다시 보기 시작</button>
            <a class="btn soft block" href="#/" style="margin-top:10px">나중에 하기</a>`;
-    $app.innerHTML = `<div class="card celebrate">${body}</div>`;
+    $app.innerHTML = `<div class="card celebrate">${body}${todayTimeHtml()}</div>`;
     // 이미 같은 주소(#/level)에 있어도 다음 레벨테스트가 시작되도록 직접 이동합니다.
     $app.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => goHash(b.dataset.go)));
   }
@@ -2029,6 +2085,59 @@
   }
   let teacherOk = false;
   let teacherOpen = null;
+  // 합격증: 새 창에 그려서 바로 인쇄 창을 열어요
+  const CERT_KEY = 'everyday-hanja:cert';
+  const certInfo = () => { try { return Object.assign({ school: '', teacher: '' }, JSON.parse(lsGet(CERT_KEY))); } catch (e) { return { school: '', teacher: '' }; } };
+  function printCertificate(name, st, g) {
+    const info = certInfo();
+    const pd = st.passed[g.id];
+    const d = parseDate(pd);
+    const dateKo = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+    const sample = HANJA.slice(g.start, g.end).map((c) => c.h).join('');
+    const w = window.open('', '_blank');
+    if (!w) { alert('팝업이 막혀 있어요. 브라우저에서 이 사이트의 팝업을 허용해 주세요.'); return; }
+    w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>합격증 - ${esc(name)} ${g.name}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&display=swap" rel="stylesheet">
+      <style>
+        @page { size: A4 portrait; margin: 0; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Noto Serif KR', serif; color: #2b2118; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .page { width: 210mm; height: 297mm; padding: 14mm; margin: 0 auto; background: #fffdf6; }
+        .frame { position: relative; height: 100%; border: 3mm double #b8862b; padding: 20mm 18mm; text-align: center; overflow: hidden; }
+        .bg { position: absolute; inset: 30mm 10mm auto; font-size: 11mm; line-height: 1.6; color: rgba(184,134,43,.08); word-break: break-all; z-index: 0; }
+        .in { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; }
+        .mark { width: 22mm; height: 22mm; margin: 0 auto 6mm; border-radius: 6mm; background: #e05a2b; color: #fff; font-size: 13mm; display: grid; place-items: center; }
+        h1 { font-size: 22mm; letter-spacing: 8mm; margin: 0 0 4mm; font-weight: 900; }
+        .sub { font-size: 5mm; color: #8a6a3a; margin-bottom: 18mm; }
+        .row { font-size: 7mm; margin: 3mm 0; }
+        .row b { font-size: 9mm; }
+        .text { font-size: 6.2mm; line-height: 2; margin: 16mm 0 0; word-break: keep-all; }
+        .info { font-size: 4.6mm; color: #6b5a44; margin-top: 10mm; }
+        .foot { margin-top: auto; }
+        .date { font-size: 6mm; margin-bottom: 10mm; }
+        .sign { font-size: 7mm; font-weight: 700; }
+        .seal { display: inline-grid; place-items: center; width: 16mm; height: 16mm; margin-left: 4mm; border: .8mm solid #d23; border-radius: 50%; color: #d23; font-size: 4mm; vertical-align: middle; transform: rotate(-10deg); }
+        .noprint { text-align: center; padding: 8px; font-family: sans-serif; }
+        @media print { .noprint { display: none; } .page { margin: 0; } }
+      </style></head><body>
+      <div class="noprint"><button onclick="print()">🖨 인쇄하기</button></div>
+      <div class="page"><div class="frame"><div class="bg">${sample.repeat(3)}</div><div class="in">
+        <div class="mark">漢</div>
+        <h1>합격증</h1>
+        <div class="sub">매일 한자 · 한자 급수 시험</div>
+        <div class="row">이 름 &nbsp; <b>${esc(name)}</b></div>
+        <div class="row">급 수 &nbsp; <b>${g.name}</b></div>
+        <p class="text">위 학생은 꾸준히 한자를 익혀<br><b>${g.name}</b> 한자 ${g.end - g.start}자의 뜻과 음을 모두 알고<br>급수 시험에 합격하였으므로 이 증서를 드립니다.</p>
+        <div class="info">총 학습 시간 ${fmtTime(totalSecs(st, pd))}</div>
+        <div class="foot">
+          <div class="date">${dateKo}</div>
+          <div class="sign">${info.school ? `${esc(info.school)} ` : '매일 한자 '}${info.teacher ? `선생님 ${esc(info.teacher)}` : ''}<span class="seal">${info.teacher ? '인' : '漢'}</span></div>
+        </div>
+      </div></div></div>
+      <script>document.fonts.ready.then(() => setTimeout(() => print(), 300));<\/script>
+      </body></html>`);
+    w.document.close();
+  }
   const PHASE_NAME = { level: '레벨테스트', study: '공부 중', exam: '시험 볼 차례', relearn: '다시 보기', done: '모두 통과' };
   function renderTeacher() {
     setTab('settings');
@@ -2071,8 +2180,13 @@
       const last = st.activity.length ? st.activity[st.activity.length - 1].date : null;
       const ex = st.exams[g.id];
       const left = st.phase === 'study' ? ` (${st.queue.filter((x) => !st.learned[x]).length}자 남음)` : '';
-      const detail = teacherOpen === n ? `<tr class="detail"><td colspan="6">
-          <b>통과한 급수</b> ${GRADES.filter((x) => st.passed[x.id]).map((x) => x.name).join(', ') || '없음'}<br>
+      const passedG = GRADES.filter((x) => st.passed[x.id]);
+      const days = [];
+      for (let d = today(), k = 0; k < 14; k++, d = addDays(d, -1)) if (isWeekday(d) || (st.time || {})[fmt(d)]) days.push(fmt(d));
+      const detail = teacherOpen === n ? `<tr class="detail"><td colspan="8">
+          <b>통과한 급수</b> ${passedG.length ? passedG.map((x) => `${x.name} <button class="btn soft small-btn" data-cert="${x.id}" data-st="${esc(n)}">🖨 합격증</button>`).join(' ') : '없음'}<br>
+          <b>최근 2주 학습 시간</b> <span class="small muted">(모두 ${fmtTime(totalSecs(st))})</span>
+          <div class="time-days">${days.slice().reverse().map((d) => `<span class="${(st.time || {})[d] ? '' : 'none'}"><small>${shortDate(d)}</small>${(st.time || {})[d] ? fmtTime(st.time[d]) : '-'}</span>`).join('')}</div>
           <b>선생님 확인을 기다리는 답</b>${(st.pending || []).length ? `<ul class="plain-list pend">${st.pending.map((q, k) => {
             const pc = C(q.idx);
             return `<li><span class="hanja">${pc.h}</span> ${hunum(pc)} — 학생 답 “<b>${esc(q.m)} ${esc(q.s)}</b>” <span class="small muted">(${GRADES.find((x) => x.id === q.grade).name} ${q.kind === 'level' ? '레벨테스트' : '급수 시험'}, ${shortDate(q.date)})</span>
@@ -2087,6 +2201,7 @@
         <td>${st.phase === 'done' ? '완료' : g.name}<div class="small muted">${PHASE_NAME[st.phase] || ''}${left}</div>${(st.pending || []).length ? `<div class="pill">🤔 확인 ${st.pending.length}</div>` : ''}</td>
         <td>${Object.keys(st.known).length}</td><td>${st.order.length}</td>
         <td>${ex ? `${ex.last}점<div class="small muted">${ex.attempts}번</div>` : '-'}</td>
+        <td>${todaySecs(st) ? fmtTime(todaySecs(st)) : '-'}</td><td>${fmtTime(totalSecs(st))}</td>
         <td>${last ? shortDate(last) : '-'}</td></tr>${detail}`;
     }).join('');
     $app.innerHTML = `
@@ -2095,8 +2210,16 @@
         <h2>👩‍🏫 선생님 메뉴</h2>
         <p class="small muted">공부한 학생 ${list.length}명 · 이름을 누르면 자세히 보고 비밀번호를 초기화할 수 있어요.</p>
         ${list.length ? `<div style="overflow-x:auto"><table class="class-table">
-          <tr><th>이름</th><th>급수·단계</th><th>아는<br>한자</th><th>공부한<br>한자</th><th>급수<br>시험</th><th>최근</th></tr>${rows}</table></div>`
+          <tr><th>이름</th><th>급수·단계</th><th>아는<br>한자</th><th>공부한<br>한자</th><th>급수<br>시험</th><th>오늘<br>시간</th><th>총<br>시간</th><th>최근</th></tr>${rows}</table></div>`
           : '<p class="muted">아직 학생이 없어요.</p>'}
+      </div>
+      <div class="card">
+        <form class="setting" id="certf" autocomplete="off">
+          <div class="txt"><b>합격증에 넣을 이름</b><div class="small muted">비워 두면 넣지 않아요. 이 기기에 저장돼요.</div>
+            <input id="cschool" class="text-input" maxlength="30" placeholder="학교 이름 (예: 한빛초등학교)" value="${esc(certInfo().school)}">
+            <input id="cteacher" class="text-input" maxlength="20" placeholder="선생님 이름" value="${esc(certInfo().teacher)}"><div id="cfb"></div></div>
+          <button class="btn ghost">저장</button>
+        </form>
       </div>
       <div class="card">
         <form class="setting" id="tpw" autocomplete="off">
@@ -2127,6 +2250,15 @@
       setPassword(n, pw);
       alert(`${n}의 비밀번호를 바꿨어요.`);
     }));
+    $app.querySelectorAll('[data-cert]').forEach((b) => b.addEventListener('click', () => {
+      const n = b.dataset.st;
+      printCertificate(n, n === user ? S : loadState(n), GRADES.find((x) => x.id === b.dataset.cert));
+    }));
+    document.getElementById('certf').addEventListener('submit', (e) => {
+      e.preventDefault();
+      lsSet(CERT_KEY, JSON.stringify({ school: document.getElementById('cschool').value.trim(), teacher: document.getElementById('cteacher').value.trim() }));
+      document.getElementById('cfb').innerHTML = '<div class="feedback ok">저장했어요.</div>';
+    });
     $app.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
       const n = b.dataset.del;
       if (!confirm(`${n}의 모든 학습 기록을 지우고 학생을 삭제할까요? 되돌릴 수 없어요.`)) return;
@@ -2156,6 +2288,7 @@
     document.getElementById('logout').hidden = !user;
     document.querySelectorAll('.modal-back').forEach((m) => m.remove());
     if (!['lesson', 'weekly', 'review', 'extra', 'relearn', 'oldreview'].includes(parts[0])) stopTimer();
+    if (user && unsaved) { save(); unsaved = 0; }
     document.body.classList.remove('in-lesson', 'logged-out');
     window.scrollTo(0, 0);
 

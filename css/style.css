@@ -623,3 +623,23 @@ ol.plain li { margin: 4px 0; }
 .car-dots .dot.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .redo-note { margin: 10px 0; padding: 10px 14px; border-radius: 16px; background: var(--s1-soft); color: var(--accent-dark); font-size: 16px; text-align: center; }
 .redo-note .hanja { font-size: 22px; }
+
+/* ---------- 학습 시간 ---------- */
+.lesson-head .timer + .timer { margin-left: 6px; }
+.time-box { margin: 12px 0; padding: 10px 14px; border-radius: 16px; background: var(--s4-soft, var(--bg)); font-size: 16px; }
+.time-box .cheer { margin-top: 6px; font-weight: 700; color: var(--accent-dark); }
+.cheer-toast {
+  position: fixed; left: 50%; top: 72px; transform: translateX(-50%); z-index: 50; width: min(92vw, 420px);
+  display: flex; gap: 10px; align-items: center; padding: 14px 18px; border-radius: 20px;
+  background: var(--paper); border: 2px solid var(--accent); box-shadow: 0 8px 24px rgba(0,0,0,.15);
+  font-size: 17px; font-weight: 700; color: var(--ink); animation: cheer-in .4s ease-out;
+  transition: opacity .5s, transform .5s;
+}
+.cheer-toast .ct-ico { font-size: 28px; }
+.cheer-toast.out { opacity: 0; transform: translate(-50%, -12px); }
+@keyframes cheer-in { from { opacity: 0; transform: translate(-50%, -16px) scale(.95); } to { opacity: 1; transform: translate(-50%, 0); } }
+.tl-time { margin-left: 8px; font-size: 13px; color: var(--ink-soft); font-weight: 400; }
+.time-days { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.time-days span { display: flex; flex-direction: column; align-items: center; min-width: 58px; padding: 4px 6px; border-radius: 10px; background: var(--bg); font-size: 13px; font-weight: 700; }
+.time-days span.none { color: var(--ink-soft); font-weight: 400; }
+.time-days small { font-size: 11px; font-weight: 400; color: var(--ink-soft); }
