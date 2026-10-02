@@ -84,6 +84,7 @@
       oldReviewDate: null, // 입장 복습을 마지막으로 한 날짜 (하루 한 번)
       yReviewDate: null,   // 입장 복습에서 어제 배운 한자 복습까지 한 날짜
       time: {},        // 날짜 -> 그날 실제로 공부한 시간(초)
+      retest: [],      // 급수 시험에서 틀려 재시험에 꼭 넣을 한자
       cheerDate: null, // 5분 격려를 보여 준 날짜
     };
   }
@@ -781,7 +782,8 @@
         <div class="name-list">${list.map((n) => `<button class="btn soft" data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>
       </div>` : ''}
       <p class="small muted center">학습 기록은 이름별로 인터넷에 저장돼요. 다른 기기에서도 이름과 비밀번호로 이어서 공부할 수 있어요.<br>
-        비밀번호를 잊었다면 선생님께 말씀드리세요. · <a href="#/teacher">선생님 메뉴</a></p>`;
+        비밀번호를 잊었다면 선생님께 말씀드리세요. · <a href="#/teacher">선생님 메뉴</a></p>
+      <p class="maker">만든이 ㅊㅂㄹ</p>`;
     const fb = (t) => { document.getElementById('fb').innerHTML = `<div class="feedback no">${t}</div>`; };
     const nameEl = document.getElementById('name');
     const pwEl = document.getElementById('pw');
@@ -850,10 +852,12 @@
       const rec = S.exams[g.id];
       return `<div class="card hero phase-exam">
         <div class="phase-ico">🏆</div>
-        <h2>${g.name} 급수 시험 볼 차례!</h2>
-        <p>${g.name} ${total}자를 모두 봐요. <b>100점</b>이면 다음 급수로 올라가요.</p>
+        <h2>${g.name} 급수 ${retestList().length ? '재시험' : '시험'} 볼 차례!</h2>
+        ${retestList().length
+          ? `<p>틀렸던 <b>${retestList().length}자</b>를 포함해 <b>${Math.min(retestList().length * 3, total)}문제</b>를 섞어서 봐요. <b>100점</b>이면 다음 급수로 올라가요.</p>`
+          : `<p>${g.name} ${total}자를 모두 봐요. <b>100점</b>이면 다음 급수로 올라가요.</p>`}
         ${rec ? `<p class="small muted">지난 시험 ${rec.last}점 · ${rec.attempts}번째 도전</p>` : ''}
-        <a class="btn block big" href="#/test">${cont ? contLabel(test) : '급수 시험 시작!'}</a>
+        <a class="btn block big" href="#/test">${cont && !(test.i === 0 && !test.retest && retestList().length) ? contLabel(test) : retestList().length ? '재시험 시작!' : '급수 시험 시작!'}</a>
         <a class="btn soft block" href="#/exam" style="margin-top:10px">📖 ${g.name} 전체 복습 먼저 하기</a></div>`;
     }
     if (S.phase === 'relearn') {
@@ -989,7 +993,7 @@
           <span class="small muted">아는 ${knownN} + 공부 ${learnedN} / ${total}자</span></div>
         <div class="progress two" style="margin-top:6px"><span class="k" style="width:${(knownN / total) * 100}%"></span><span style="width:${(learnedN / total) * 100}%"></span></div>
       </div>`;
-    $app.innerHTML = main;
+    $app.innerHTML = `${main}<p class="maker">만든이 ㅊㅂㄹ</p>`;
     bindOpen();
     const todays = todaysNew(t);
     $app.querySelectorAll('[data-carousel]').forEach((b) => b.addEventListener('click', () => openCarousel(todays, +b.dataset.carousel)));
@@ -1660,19 +1664,35 @@
   function makeTest(kind) {
     const g = curGrade();
     let idxs = HANJA.slice(g.start, g.end).map((c) => c.idx);
+    // 재시험: 틀린 한자 + 같은 급수의 다른 한자를 무작위로 더해 틀린 수의 3배 (급수 전체보다 많으면 전체)
+    const re = kind === 'exam' ? retestList() : [];
+    if (re.length) {
+      const others = shuffle(idxs.filter((i) => !re.includes(i))).slice(0, Math.max(0, Math.min(re.length * 3, idxs.length) - re.length));
+      idxs = re.concat(others);
+    }
     if (kind === 'exam') idxs = shuffle(idxs);
     return {
-      kind, grade: g.id, i: 0, finished: false, started: fmt(today()),
+      kind, grade: g.id, i: 0, finished: false, started: fmt(today()), retest: re.length > 0,
       items: idxs.map((i) => ({ idx: i, words: shuffle(C(i).words.map((_, k) => k)).slice(0, 2), m: '', s: '', skip: false, over: false })),
     };
   }
   const itemOk = (it) => !it.skip && soundOk(C(it.idx), it.s) && (it.over || meaningOk(C(it.idx), it.m));
-  const testName = (t) => (t.kind === 'level' ? '레벨테스트' : '급수 시험');
+  const testName = (t) => (t.kind === 'level' ? '레벨테스트' : t.retest ? '급수 재시험' : '급수 시험');
+  // 지난 급수 시험에서 틀린 한자 (재시험에 꼭 넣어요)
+  function retestList(st = S) {
+    const g = GRADES[Math.min(st.gradeIdx, GRADES.length - 1)];
+    if (st.passed[g.id]) return [];
+    if (st.retest && st.retest.length) return st.retest.slice();
+    const rec = st.exams[g.id];
+    return rec && rec.wrong && rec.wrong.length ? rec.wrong.slice() : [];
+  }
 
   function startTest(kind) {
     const want = kind === 'level' ? 'level' : 'exam';
     if (S.phase !== want) { location.hash = '#/'; return; }
-    if (!S.test || S.test.kind !== kind || S.test.grade !== curGrade().id) {
+    // 재시험을 볼 차례인데 예전에 만들어 둔(아직 시작 안 한) 전체 시험이 있으면 새로 만들어요
+    const stale = S.test && S.test.kind === 'exam' && S.test.i === 0 && !S.test.retest && retestList().length > 0;
+    if (!S.test || stale || S.test.kind !== kind || S.test.grade !== curGrade().id) {
       S.test = makeTest(kind);
       save();
     }
@@ -1833,6 +1853,7 @@
     st.queue = [];
     st.relearn = [];
     if (st.test && st.test.grade === g.id) st.test = null;
+    st.retest = [];
     st.phase = st.gradeIdx >= GRADES.length ? 'done' : 'level';
   }
   // 마지막 급수 시험에서 아직 인정받지 못한 틀린 한자 수
@@ -1841,7 +1862,7 @@
     const rec = st.exams[g.id];
     if (!rec) return null;
     if (rec.wrong) return rec.wrong.length;
-    const total = g.end - g.start;
+    const total = rec.n || g.end - g.start;
     let n = Math.round(((100 - rec.last) / 100) * total);
     let k = -1;
     st.activity.forEach((a, j) => { if (a.type === 'exam' && a.grade === g.name) k = j; });
@@ -1888,7 +1909,7 @@
       const scoreN = Math.round((right / t.items.length) * 100);
       const rec = S.exams[g.id] || { best: 0, attempts: 0 };
       // wrong: 아직 인정받지 못한 틀린 한자 (선생님이 인정하면 빠지고, 다 빠지면 통과)
-      S.exams[g.id] = { best: Math.max(rec.best, scoreN), last: scoreN, attempts: rec.attempts + 1, date: ds, wrong: wrong.slice() };
+      S.exams[g.id] = { best: Math.max(rec.best, scoreN), last: scoreN, attempts: rec.attempts + 1, date: ds, wrong: wrong.slice(), n: t.items.length };
       logActivity({ type: 'exam', grade: g.name, score: scoreN, passed: scoreN === 100, correct: right, total: t.items.length });
       wrong.forEach(addMissed);
       if (!wrong.length) {
@@ -1896,6 +1917,7 @@
         next = 'pass';
       } else {
         S.relearn = wrong;
+        S.retest = wrong.slice();
         S.phase = 'relearn';
         next = 'relearn';
       }
@@ -2089,7 +2111,7 @@
       st.missed = st.missed.filter((x) => x !== q.idx);
       if (rec) {
         if (rec.wrong) rec.wrong = rec.wrong.filter((x) => x !== q.idx);
-        const total = g.end - g.start;
+        const total = rec.n || g.end - g.start;
         const scoreN = Math.round(((total - examWrongLeft(st, g)) / total) * 100);
         rec.last = scoreN;
         rec.best = Math.max(rec.best, scoreN);
