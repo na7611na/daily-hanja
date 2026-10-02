@@ -241,6 +241,8 @@
   const queueLeft = () => S.queue.filter((x) => !S.learned[x]).length + (S.redo || []).length;
   // 틀린 한자를 모두 배우면 급수 시험 단계로 넘어갑니다.
   function syncPhase() {
+    // 예전에 선생님 인정으로 100점이 되었는데 넘어가지 못한 기록도 고쳐요
+    if (checkExamPass(S)) save();
     if (S.phase === 'study' && !queueLeft() && !(session && session.type !== 'review')) {
       S.phase = 'exam';
       save();
@@ -1760,7 +1762,34 @@
     st.gradeIdx = GRADES.indexOf(g) + 1;
     st.queue = [];
     st.relearn = [];
+    if (st.test && st.test.grade === g.id) st.test = null;
     st.phase = st.gradeIdx >= GRADES.length ? 'done' : 'level';
+  }
+  // 마지막 급수 시험에서 아직 인정받지 못한 틀린 한자 수
+  // (예전 기록은 틀린 한자 목록이 없어서, 점수와 그 뒤에 선생님이 인정한 한자로 셈해요)
+  function examWrongLeft(st, g) {
+    const rec = st.exams[g.id];
+    if (!rec) return null;
+    if (rec.wrong) return rec.wrong.length;
+    const total = g.end - g.start;
+    let n = Math.round(((100 - rec.last) / 100) * total);
+    let k = -1;
+    st.activity.forEach((a, j) => { if (a.type === 'exam' && a.grade === g.name) k = j; });
+    const acc = new Set(st.activity.slice(k + 1)
+      .filter((a) => a.type === 'accept' && a.kind === 'exam' && C(a.idx).gradeIdx === GRADES.indexOf(g)).map((a) => a.idx));
+    return Math.max(0, n - acc.size);
+  }
+  // 급수 시험 뒤(다시 보기 전이든 후든) 선생님 인정으로 틀린 한자가 모두 없어졌으면 통과
+  function checkExamPass(st) {
+    if (!['exam', 'relearn'].includes(st.phase) || st.gradeIdx >= GRADES.length) return false;
+    const g = GRADES[st.gradeIdx];
+    const rec = st.exams[g.id];
+    if (!rec || st.passed[g.id]) return false;
+    if (examWrongLeft(st, g) !== 0) return false;
+    rec.last = 100;
+    rec.best = 100;
+    passGrade(g, st);
+    return true;
   }
   const goHash = (h) => { if (location.hash === h) route(); else location.hash = h; };
   function finalizeTest() {
@@ -1788,7 +1817,8 @@
     } else {
       const scoreN = Math.round((right / t.items.length) * 100);
       const rec = S.exams[g.id] || { best: 0, attempts: 0 };
-      S.exams[g.id] = { best: Math.max(rec.best, scoreN), last: scoreN, attempts: rec.attempts + 1, date: ds };
+      // wrong: 아직 인정받지 못한 틀린 한자 (선생님이 인정하면 빠지고, 다 빠지면 통과)
+      S.exams[g.id] = { best: Math.max(rec.best, scoreN), last: scoreN, attempts: rec.attempts + 1, date: ds, wrong: wrong.slice() };
       logActivity({ type: 'exam', grade: g.name, score: scoreN, passed: scoreN === 100, correct: right, total: t.items.length });
       wrong.forEach(addMissed);
       if (!wrong.length) {
@@ -1980,16 +2010,22 @@
       if (st.levels[g.id]) st.levels[g.id].known++;
       // 공부할 한자가 하나도 남지 않으면(모두 아는 한자) 급수를 통과해요.
       if (cur === g && st.phase === 'study' && !st.queue.length) passGrade(g, st);
-    } else if (cur === g && st.phase === 'relearn' && st.relearn.includes(q.idx)) {
-      st.relearn = st.relearn.filter((x) => x !== q.idx);
-      const total = g.end - g.start;
-      const scoreN = Math.round(((total - st.relearn.length) / total) * 100);
-      const rec = st.exams[g.id];
-      if (rec) { rec.last = scoreN; rec.best = Math.max(rec.best, scoreN); }
-      st.missed = st.missed.filter((x) => x !== q.idx);
-      if (!st.relearn.length) passGrade(g, st);
     }
     st.activity.push({ date: ds, type: 'accept', idx: q.idx, kind: q.kind });
+    // 급수 시험: '틀린 한자 다시 보기'를 했든 안 했든, 인정으로 100점이 되면 다음 급수로
+    if (q.kind === 'exam' && cur === g && ['relearn', 'exam'].includes(st.phase)) {
+      const rec = st.exams[g.id];
+      st.relearn = st.relearn.filter((x) => x !== q.idx);
+      st.missed = st.missed.filter((x) => x !== q.idx);
+      if (rec) {
+        if (rec.wrong) rec.wrong = rec.wrong.filter((x) => x !== q.idx);
+        const total = g.end - g.start;
+        const scoreN = Math.round(((total - examWrongLeft(st, g)) / total) * 100);
+        rec.last = scoreN;
+        rec.best = Math.max(rec.best, scoreN);
+      }
+      if (!checkExamPass(st) && st.phase === 'relearn' && !st.relearn.length) st.phase = 'exam';
+    }
   }
   let teacherOk = false;
   let teacherOpen = null;
