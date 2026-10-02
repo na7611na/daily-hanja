@@ -1034,9 +1034,9 @@
 
   /* ================= 학습 시간 ================= */
   // 공부 화면(학습·복습·레벨테스트·급수 시험)을 실제로 보고 있는 시간만 셉니다.
-  // 다른 창으로 가거나 화면이 꺼졌을 때, 2분 동안 아무 입력이 없을 때는 세지 않아요.
+  // 다른 창으로 가거나 화면이 꺼졌을 때, 30초 동안 아무 입력이 없을 때는 세지 않아요.
   const STUDY_SCREENS = ['lesson', 'extra', 'relearn', 'weekly', 'review', 'oldreview', 'level', 'test'];
-  const IDLE_LIMIT = 120 * 1000;
+  const IDLE_LIMIT = 30 * 1000;
   const CHEER_AT = 5 * 60;
   const CHEERS = [
     '벌써 5분이 넘었어요! 꾸준히 하는 힘이 진짜 실력이 돼요.',
