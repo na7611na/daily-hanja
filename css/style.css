@@ -628,6 +628,7 @@ ol.plain li { margin: 4px 0; }
 .lesson-head .timer + .timer { margin-left: 6px; }
 .time-box { margin: 12px 0; padding: 10px 14px; border-radius: 16px; background: var(--s4-soft, var(--bg)); font-size: 16px; }
 .time-box .cheer { margin-top: 6px; font-weight: 700; color: var(--accent-dark); }
+.time-box .cheer.more { color: var(--s2, var(--accent-dark)); }
 .cheer-toast {
   position: fixed; left: 50%; top: 72px; transform: translateX(-50%); z-index: 50; width: min(92vw, 420px);
   display: flex; gap: 10px; align-items: center; padding: 14px 18px; border-radius: 20px;

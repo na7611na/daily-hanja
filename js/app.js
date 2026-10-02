@@ -1084,11 +1084,24 @@
   }
   const studyClock = () => `<span class="timer" title="오늘 공부한 시간">⏱ <span class="study-clock">${clock(todaySecs())}</span></span>`;
   // 끝 화면에 보여 주는 오늘 학습 시간과 격려
-  function todayTimeHtml() {
+  // 5분이 안 됐을 때 (오늘 한자 학습 끝 화면): 조금 더 해 보자는 격려
+  const MORE = [
+    '조금만 더 해 볼까요? 5분을 채우면 한자가 머릿속에 더 오래 남아요.',
+    '좋은 출발이에요! 5분까지 조금만 더 힘내 봐요.',
+    '거의 다 왔어요! 몇 분만 더 공부하면 오늘 목표 5분 달성이에요.',
+    '잘하고 있어요! 조금 더 공부하면 실력이 쑥쑥 자라요.',
+  ];
+  function todayTimeHtml(nudge = false) {
     const sec = todaySecs();
     const ds = fmt(today());
-    return `<div class="time-box">⏱ 오늘 공부한 시간 <b>${fmtTime(sec)}</b>
-      ${sec >= CHEER_AT ? `<div class="cheer">🌟 ${cheerOf(ds)}</div>` : ''}</div>`;
+    let note = '';
+    if (sec >= CHEER_AT) note = `<div class="cheer">🌟 ${cheerOf(ds)}</div>`;
+    else if (nudge) {
+      const left = Math.max(1, Math.ceil((CHEER_AT - sec) / 60));
+      note = `<div class="cheer more">💪 ${MORE[[...ds].reduce((n, ch) => n + ch.charCodeAt(0), 0) % MORE.length]}</div>
+        <div class="small">오늘 목표 5분까지 <b>약 ${left}분</b> 남았어요. 아래 버튼으로 조금 더 공부해 봐요!</div>`;
+    }
+    return `<div class="time-box">⏱ 오늘 공부한 시간 <b>${fmtTime(sec)}</b>${note}</div>`;
   }
 
   function nextStep() {
@@ -1552,11 +1565,12 @@
       <h2>${title}</h2>
       ${redoNote}
       ${session.total ? `<p>문제 <b>${session.correct} / ${session.total}</b> 정답</p>` : ''}
-      ${todayTimeHtml()}
+      ${todayTimeHtml(['lesson', 'extra'].includes(session.type))}
       ${writing}
       <p class="muted">${msg}</p>
       ${session.type === 'lesson' ? `<p class="streak">🔥 연속 학습 <b>${streak()}일</b></p>` : ''}
       ${session.type === 'relearn' ? action : `<a class="btn block big" href="#/">홈으로</a>${action}`}
+      ${['lesson', 'extra'].includes(session.type) && todaySecs() < CHEER_AT && S.order.length ? '<a class="btn soft block" href="#/review" style="margin-top:10px">🎲 자유 복습 (5문제)</a>' : ''}
     </div>`;
     session = null;
     return html;
