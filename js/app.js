@@ -982,12 +982,17 @@
     let knownN = 0, learnedN = 0;
     for (let i = g.start; i < g.end; i++) { if (S.known[i]) knownN++; else if (S.learned[i]) learnedN++; }
     const ds = fmt(t);
-    const cells = weekDates(t).map((d, k) => {
+    // 이번 주 상황판: 월~일 7칸, 학습을 마친 날에 출석 도장 (누르면 그날 배운 한자)
+    const mon = mondayOf(t);
+    const cells = [0, 1, 2, 3, 4, 5, 6].map((k) => {
+      const d = fmt(addDays(mon, k));
       const e = S.log[d];
       const idx = e && e.newIdx !== null && e.newIdx !== undefined && S.learned[e.newIdx] === d ? e.newIdx : null;
-      const cls = [e && e.done ? 'done' : '', d === ds ? 'today' : ''].join(' ');
-      return `<div class="d ${cls}"><div class="lbl">${DAY[k + 1]}</div>
-        <div class="cell">${idx !== null ? `<button class="cell-in hanja" data-open="${idx}">${C(idx).h}</button>` : (e && e.done ? '✔' : '')}</div></div>`;
+      const cls = [e && e.done ? 'done' : '', d === ds ? 'today' : '', k >= 5 ? 'wkend' : ''].join(' ');
+      const stamp = e && e.done
+        ? (idx !== null ? `<button class="cell-in stamp-btn" data-open="${idx}" aria-label="${DAY[(k + 1) % 7]}요일 출석 · ${C(idx).h} 보기">${STAMP_SVG}</button>` : `<span class="stamp-btn" aria-label="출석">${STAMP_SVG}</span>`)
+        : '';
+      return `<div class="d ${cls}"><div class="lbl">${DAY[(k + 1) % 7]}</div><div class="cell">${stamp}</div></div>`;
     }).join('');
     main += `
       <div class="card">
