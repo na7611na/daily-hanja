@@ -900,13 +900,13 @@
     if (entry && entry.done) {
       const todays = todaysNew(t);
       return `<div class="card hero">
-        <div class="done-head">
-          <div class="done-text">${head}</div>
-          <div class="done-stamp" role="img" aria-label="오늘의 학습 완료">${DONE_STAMP_SVG}</div>
-        </div>
+        ${head}
         ${todays.length ? `<div class="today-chars">${todays.map((i, k) => `<button class="tc" data-carousel="${k}"><span class="hanja">${C(i).h}</span><small>${hunum(C(i))}</small></button>`).join('')}</div>` : ''}
         <p class="muted">${t.getDay() === 5 ? '한 주 동안 수고했어요! 주말엔 푹 쉬어요.' : weekend ? '주말에도 공부했어요! 정말 멋져요.' : '잘했어요! 내일 아침에 복습으로 다시 만나요.'}</p>
-        ${nextNewIdx() !== null ? `<a class="btn ghost block" href="#/extra">➕ 한 자 더 배우기</a>` : ''}
+        <div class="stamp-row">
+          <div class="done-stamp" role="img" aria-label="오늘의 학습 완료 도장">${DONE_STAMP_SVG}</div>
+          ${nextNewIdx() !== null ? `<a class="btn ghost" href="#/extra">➕ 한 자 더 배우기</a>` : ''}
+        </div>
         <div class="btn-row">
           ${todays.length ? `<button class="btn soft" data-carousel="0">📖 다시 보기${todays.length > 1 ? ` (${todays.length}자)` : ''}</button>` : ''}
           <a class="btn soft" href="#/review">자유 복습</a>
@@ -928,7 +928,10 @@
       <div class="big-hanja mystery">${started || isRedo(c.idx) ? c.h : '?'}</div>
       <p class="muted">${isRedo(c.idx) ? `🔁 지난번에 틀린 문제가 있던 '${hunum(c)}'를 다시 배워요.` : started ? '하던 학습을 이어서 해요.' : '오늘은 어떤 한자를 만날까요?'}</p>
       <ol class="steps">${rows.map(([e, n, txt, cls]) => `<li class="${cls ? `st-${cls}` : ''}"><span class="num">${n || e}</span><span>${txt}</span></li>`).join('')}</ol>
-      <a class="btn block big" href="#/lesson">${started ? '이어서 하기' : '오늘의 학습 시작!'} · 약 5분</a>
+      <div class="stamp-row">
+        <div class="done-stamp empty" role="img" aria-label="학습을 마치면 여기에 도장을 찍어요">${EMPTY_STAMP_SVG}</div>
+        <a class="btn big" href="#/lesson">${started ? '이어서 하기' : '오늘의 학습 시작!'}<small class="btn-sub">약 5분</small></a>
+      </div>
     </div>`;
   }
 
