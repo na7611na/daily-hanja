@@ -82,12 +82,28 @@
     node.parentNode.replaceChild(frag, node);
   }
 
+  // 굵은 글씨 바로 앞뒤에 붙은 따옴표·조사도 함께 묶어요: '<b>틀림</b>'이라고 → 한 덩어리
+  function glueSides(el) {
+    if (!el.parentNode || el.parentNode.classList && el.parentNode.classList.contains('ck-wrap')) return;
+    const prev = el.previousSibling;
+    const next = el.nextSibling;
+    const pm = prev && prev.nodeType === 3 ? prev.nodeValue.match(/[^\s]{1,3}$/) : null;
+    const nm = next && next.nodeType === 3 ? next.nodeValue.match(/^[^\s]{1,8}/) : null;
+    if (!pm && !nm) return;
+    const wrap = document.createElement('span');
+    wrap.className = 'ck ck-wrap';
+    el.parentNode.insertBefore(wrap, el);
+    if (pm) { const part = prev.splitText(prev.nodeValue.length - pm[0].length); done.add(part); wrap.appendChild(part); }
+    wrap.appendChild(el);
+    if (nm) { next.splitText(nm[0].length); done.add(next); wrap.appendChild(next); }
+  }
+
   function walk(root) {
     if (!root || SKIP.has(root.nodeName) || (root.closest && root.closest('svg, textarea, input, .ck, .hanja, .big-hanja'))) return;
     // 짧은 굵은 글씨·표시 글씨는 한 덩어리로
     if (root.querySelectorAll) {
       root.querySelectorAll('b, strong, mark, em, .pos').forEach((el) => {
-        if (el.textContent.length <= 12) el.classList.add('ck');
+        if (el.textContent.length <= 12) { el.classList.add('ck'); glueSides(el); }
       });
       if (/^(B|STRONG|MARK|EM)$/.test(root.nodeName) && root.textContent.length <= 12) root.classList.add('ck');
     }

@@ -695,11 +695,67 @@
       <div class="words">${words}</div>`;
   }
   // 시험지처럼 문제 위에 크게 찍는 채점 표시 (맞으면 동그라미, 틀리면 빗금)
-  const stampHtml = (ok) => `<span class="mark ${ok ? 'ok' : 'no'}" role="img" aria-label="${ok ? '맞았어요' : '틀렸어요'}">${ok
-    ? '<svg viewBox="0 0 100 100"><path d="M50 8c24 0 42 17 42 41 0 25-19 43-43 43C25 92 8 74 9 50 10 26 28 9 54 9" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/></svg>'
-    : '<svg viewBox="0 0 100 100"><path d="M14 52 L38 80 L88 14" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>'}</span>`;
+  // 채점 표시: 선생님이 빨간 색연필로 시험지에 긋듯이 (맞으면 동그라미, 틀리면 빗금)
+  const PENCIL = `<defs><filter id="pencil" x="-10%" y="-10%" width="120%" height="120%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" xChannelSelector="R" yChannelSelector="G" result="d"/>
+    <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" seed="9" result="g"/>
+    <feColorMatrix in="g" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.2 0 0 0 1.5" result="ga"/>
+    <feComposite in="d" in2="ga" operator="in"/></filter></defs>`;
+  const stampHtml = (ok) => `<span class="mark ${ok ? 'ok' : 'no'}" role="img" aria-label="${ok ? '맞았어요' : '틀렸어요'}"><svg viewBox="0 0 100 100">${PENCIL}<g filter="url(#pencil)" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">${ok
+    ? '<path pathLength="1" stroke-width="6.5" d="M58 12 C 33 9, 13 27, 13 52 C 13 77, 35 91, 58 88 C 80 85, 92 66, 89 44 C 86 24, 68 12, 46 15 C 40 16, 35 18, 31 21"/><path pathLength="1" class="p2" stroke-width="2.4" opacity=".55" d="M60 15 C 36 12, 17 29, 17 53 C 18 75, 37 88, 59 85 C 78 82, 89 64, 86 45 C 83 27, 66 15, 47 18"/>'
+    : '<path pathLength="1" stroke-width="7" d="M80 10 C 66 32, 47 58, 22 90"/><path pathLength="1" class="p2" stroke-width="2.6" opacity=".55" d="M84 14 C 70 36, 51 61, 27 92"/>'}</g></svg></span>`;
   // 한자어에서 소리가 바뀌어 굳어진 말 등의 설명
-  const noteHtml = (w) => (w.note ? `<div class="word-note">💡 ${w.note}</div>` : '');
+  // 직접 적은 설명(WORD_NOTES) + 저절로 만드는 설명(不→부, 두음 법칙, 소리가 여럿인 한자)
+  function charSounds(ch) {
+    const c = BY_CHAR[ch];
+    if (c) return c.meanings.length === c.sounds.length ? c.meanings.map((m, i) => [m, c.sounds[i]]) : c.sounds.map((x) => [c.meanings.join('·'), x]);
+    if (EXTRA_HUNUM[ch]) return EXTRA_HUNUM[ch].split('|').map((p) => { const k = p.lastIndexOf(' '); return [p.slice(0, k), p.slice(k + 1)]; });
+    return [];
+  }
+  function wordNote(w) {
+    const notes = [];
+    if (w.note) notes.push({ key: `w:${w.word}`, text: w.note });
+    const read = w.read.replace(/\s/g, '');
+    [...w.word].forEach((ch, k) => {
+      const syl = read[k];
+      const pairs = charSounds(ch);
+      const sounds = pairs.map((x) => x[1]);
+      if (!syl || !sounds.length || w.note) return;
+      if (ch === '不' && syl === '부') {
+        notes.push({ key: 'alt:不', text: `'不(아닐 불)'은 본래 '불'로 읽지만, 'ㄷ'이나 'ㅈ'으로 시작하는 글자 앞에서는 소리 내기 쉽게 <b>'부'</b>로 읽어요. (부족, 부정, 부동)` });
+      } else if (!sounds.includes(syl)) {
+        const s0 = sounds.find((x) => dueum(x) === syl);
+        if (s0 && k === 0) notes.push({ key: `du:${ch}`, text: `'${ch}'의 본래 소리는 '${s0}'${josa(s0, '이에요')}. 하지만 낱말의 <b>첫머리</b>에서는 <b>'${syl}'</b>${josa(syl, '으로')} 읽어요. (두음 법칙) 다른 글자 뒤에서는 '${s0}'${josa(s0, '으로')} 읽어요.` });
+      } else if (sounds.length > 1 && syl !== sounds[0]) {
+        const [m0, s0] = pairs[0];
+        const [m1] = pairs.find((x) => x[1] === syl);
+        notes.push({ key: `alt:${ch}`, text: `'${ch}'에는 '${m0} ${s0}', '${m1} ${syl}'처럼 소리가 여럿 있어요. '${w.read}'에서는 <b>'${syl}'</b>${josa(syl, '으로')} 읽어요.` });
+      }
+    });
+    return notes;
+  }
+  const noteHtml = (w) => wordNote(w).map((n) => `<div class="word-note">💡 ${n.text}</div>`).join('');
+  // 2단계에서 뜻을 바르게 이었을 때 설명 카드를 띄워요
+  function openNotePop(w, notes, target) {
+    const back = document.createElement('div');
+    back.className = 'modal-back center';
+    back.innerHTML = `<div class="modal note-pop" role="dialog" aria-modal="true">
+      <div class="np-head">💡 알아 두면 좋아요</div>
+      <div class="np-word">${w.read}</div>
+      ${wordCharsHtml(w, target)}
+      <div class="np-mean">${w.mean}</div>
+      ${notes.map((n) => `<p class="np-text">${n.text}</p>`).join('')}
+      <button class="btn block" id="np-ok">알겠어요</button>
+    </div>`;
+    const close = () => { back.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape' || e.key === 'Enter') close(); };
+    back.addEventListener('click', (e) => { if (e.target === back) close(); });
+    back.querySelector('#np-ok').addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(back);
+    back.querySelector('#np-ok').focus({ preventScroll: true });
+  }
   const hunumPairs = (c) => (c.meanings.length === c.sounds.length
     ? c.meanings.map((m, k) => [m, c.sounds[k]]) : [[c.meanings.join(', '), c.sounds.join(', ')]]);
   // learn: 1단계 '오늘의 한자'에서는 뜻·소리 칸이 누르면 읽어 주는 버튼이 되고, 아래 반복 줄은 없어요
@@ -1340,9 +1396,14 @@
     const tryPair = () => {
       if (step.selL === null || step.selR === null) return renderStep();
       if (step.selL === step.selR) {
+        const w = c.words[step.selL];
         step.done.push(step.selL);
         step.selL = step.selR = null;
         renderStep();
+        // 설명이 필요한 낱말이면 카드를 띄워요 (같은 설명은 한 번만)
+        step.notes = step.notes || [];
+        const notes = wordNote(w).filter((n) => n.key.startsWith('w:') || !step.notes.includes(n.key));
+        if (notes.length) { notes.forEach((n) => step.notes.push(n.key)); openNotePop(w, notes, c.h); }
       } else {
         const w = c.words[step.selL];
         const L = $app.querySelector(`[data-w="${step.selL}"]`);
@@ -1445,8 +1506,8 @@
         b.classList.add('shake', 'bad');
         setTimeout(() => b.classList.remove('shake', 'bad'), 600);
         document.getElementById('fb').innerHTML = step.filled.includes(k)
-          ? `<div class="feedback no">🤔 '<b>${w.read}</b>'${josa(w.read, '은')} 이미 다른 빈칸에 넣었어요. 문장을 다시 읽어 봐요.</div>`
-          : `<div class="feedback no">🤔 '<b>${w.read}</b>'${josa(w.read, '은')} '${w.mean}'${josa(w.mean, '이라는')} 뜻이에요. 이 문장에 어울리는지 다시 생각해 봐요.</div>`;
+          ? `<div class="feedback no">🤔 <b>'${w.read}'</b>${josa(w.read, '은')} 이미 다른 빈칸에 넣었어요. 문장을 다시 읽어 봐요.</div>`
+          : `<div class="feedback no">🤔 <b>'${w.read}'</b>${josa(w.read, '은')} '${w.mean}'${josa(w.mean, '이라는')} 뜻이에요. 이 문장에 어울리는지 다시 생각해 봐요.</div>`;
       }
     }));
   }
@@ -1483,8 +1544,8 @@
     const own = charHunum(c.h, syl);
     if (step.ok) return `<div class="explain"><div class="solve">'${w.read}'의 '${syl}'${josa(syl, '은')} <b>${own.m} ${own.s}</b>(<span class="hj">${c.h}</span>)${josa(own.s, '이에요')}.</div></div>`;
     const why = [];
-    if (!step.okM) why.push(`뜻을 '<b>${esc(step.m)}</b>'${josa(step.m, '이라고')} 썼어요. 이 글자의 뜻(훈)은 '<b>${c.meanings.join(', ')}</b>'${josa(c.meanings.join(', '), '이에요')}.`);
-    if (!step.okS) why.push(`음을 '<b>${esc(step.s)}</b>'${josa(step.s, '이라고')} 썼어요. 이 글자의 소리(음)는 '<b>${c.sounds.join(', ')}</b>'${josa(c.sounds.join(', '), '이에요')}.`);
+    if (!step.okM) why.push(`뜻을 <b>'${esc(step.m)}'</b>${josa(step.m, '이라고')} 썼어요. 이 글자의 뜻(훈)은 <b>'${c.meanings.join(', ')}'</b>${josa(c.meanings.join(', '), '이에요')}.`);
+    if (!step.okS) why.push(`음을 <b>'${esc(step.s)}'</b>${josa(step.s, '이라고')} 썼어요. 이 글자의 소리(음)는 <b>'${c.sounds.join(', ')}'</b>${josa(c.sounds.join(', '), '이에요')}.`);
     if (!c.sounds.includes(syl)) why.push(`'${w.read}'에서는 '${syl}'${josa(syl, '으로')} 읽지만 본래 소리는 '${c.sounds[0]}'${josa(c.sounds[0], '이에요')}. (두음 법칙)`);
     return `<div class="explain"><div class="answer">정답 <b>${own.m} ${own.s}</b>(<span class="hj">${c.h}</span>)</div><div class="why"><b>틀린 까닭</b> ${why.join(' ')}</div>
       <div class="solve"><b>해설</b> ${breakdown(w)}<br>'${w.read}'의 '${targetPos(c, w).syl}'${josa(targetPos(c, w).syl, '은')} <span class="hj">${c.h}</span>(${own.m} ${own.s})${josa(own.s, '이에요')}.</div></div>`;
@@ -1605,7 +1666,7 @@
     const used = c.words.filter((w) => text.replace(/\s/g, '').includes(plainRead(w)));
     const good = [];
     if (used.length > 1) good.push(`배운 낱말을 <b>${used.length}개</b>나 넣었어요! (${used.map((w) => w.read).join(', ')})`);
-    else if (used.length) good.push(`배운 낱말 '<b>${used[0].read}</b>'${josa(used[0].read, '을')} 넣어 썼어요.`);
+    else if (used.length) good.push(`배운 낱말 <b>'${used[0].read}'</b>${josa(used[0].read, '을')} 넣어 썼어요.`);
     if (text.length >= 25) good.push('자세하게 잘 썼어요.');
     return { fixes: list, fixed, html, hints, good, used };
   }
@@ -1619,7 +1680,7 @@
       ${r.fixes.length ? `<div class="pf-text">${r.html}</div>
         <ul class="pf-why">${whys.map((x) => `<li>${x}</li>`).join('')}</ul>` : '<div class="pf-good">🎉 고칠 곳을 찾지 못했어요. 맞춤법과 띄어쓰기가 훌륭해요!</div>'}
       ${r.hints.map((h) => `<div class="pf-hint">💡 ${h}</div>`).join('')}
-      <div class="pf-hint">🔎 '<b>${w.read}</b>'의 뜻은 '${w.mean}'${josa(w.mean, '이에요')}. 뜻에 맞게 썼는지 소리 내어 읽어 보세요.</div>
+      <div class="pf-hint">🔎 <b>'${w.read}'</b>의 뜻은 '${w.mean}'${josa(w.mean, '이에요')}. 뜻에 맞게 썼는지 소리 내어 읽어 보세요.</div>
       ${r.fixes.length ? '<button type="button" class="btn ghost block" id="apply">✏️ 고친 대로 바꾸기</button>' : ''}
     </div>`;
   }
@@ -1704,7 +1765,7 @@
     return `<div class="card lesson-card">${stageHtml('infer')}
       <div class="quiz-q${answered ? ' graded' : ''}">${answered ? stampHtml(step.chosen === step.answer) : ''}
         <div class="today-chip"><span class="hanja">${c.h}</span> ${hunum(c)}</div>
-        <div class="prompt">오늘의 한자 '<b>${hunum(c)}</b>'${josa(hunum(c), '이')} <b class="pos">쓰인</b> 어휘는 무엇일까요?</div>
+        <div class="prompt">오늘의 한자 <b>'${hunum(c)}'</b>${josa(hunum(c), '이')} <b class="pos">쓰인</b> 어휘는 무엇일까요?</div>
         <div class="qhint">단어의 뜻을 생각해 보며 짐작해 보세요!</div>
       </div>
       <div class="options two">${opts}</div>
@@ -1779,7 +1840,7 @@
       q = `<div class="qword">${hangulMarked(c, w)}</div><div class="qhint">뜻: ${w.mean}</div>
         <div class="prompt"><mark>색으로 표시된 글자</mark>에 쓰인 한자의 <b>음훈</b>은?</div>`;
     } else {
-      q = `${hangulPartsHtml(w, c.h)}<div class="prompt">음훈을 보고 '<b>${w.read}</b>'의 <b>뜻</b>을 골라요.</div>`;
+      q = `${hangulPartsHtml(w, c.h)}<div class="prompt">음훈을 보고 <b>'${w.read}'</b>의 <b>뜻</b>을 골라요.</div>`;
     }
     const answered = step.chosen !== undefined;
     const opts = step.options.map((o, k) => {
