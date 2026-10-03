@@ -1522,6 +1522,107 @@
     const t = text.replace(/\s/g, '');
     return c.words.find((w) => t.includes(plainRead(w)) || t.includes(w.word)) || null;
   }
+  /* ---------- 글짓기 첨삭: 정해진 규칙으로 바로 고쳐 줘요 ---------- */
+  // 자주 틀리는 낱말 [틀린 말, 바른 말]
+  const SPELL = [
+    ['됬', '됐'], ['되요', '돼요'], ['안되요', '안 돼요'], ['안돼', '안 돼'], ['뵈요', '봬요'],
+    ['할께', '할게'], ['줄께', '줄게'], ['갈께', '갈게'], ['볼께', '볼게'], ['올께', '올게'], ['먹을께', '먹을게'], ['읽을께', '읽을게'], ['도와줄께', '도와줄게'],
+    ['할려고', '하려고'], ['갈려고', '가려고'], ['볼려고', '보려고'], ['먹을려고', '먹으려고'],
+    ['몇일', '며칠'], ['몇 일', '며칠'], ['어떻해', '어떡해'], ['금새', '금세'], ['오랫만', '오랜만'], ['설겆이', '설거지'], ['희안', '희한'],
+    ['역활', '역할'], ['깨끗히', '깨끗이'], ['일일히', '일일이'], ['곰곰히', '곰곰이'], ['틈틈히', '틈틈이'], ['왠일', '웬일'], ['왠만', '웬만'], ['웬지', '왠지'],
+    ['어의없', '어이없'], ['문안하', '무난하'], ['설레임', '설렘'], ['가르키', '가리키'], ['안밖', '안팎'], ['그리고나서', '그러고 나서'], ['읍니다', '습니다'],
+    ['않하', '안 하'], ['않해', '안 해'], ['않했', '안 했'], ['않가', '안 가'], ['않갔', '안 갔'], ['않와', '안 와'], ['않왔', '안 왔'],
+    ['않먹', '안 먹'], ['않좋', '안 좋'], ['않돼', '안 돼'], ['않되', '안 되'], ['않보', '안 보'], ['않봤', '안 봤'],
+  ];
+  // 배운 낱말 뒤에 붙는 조사 [받침 있을 때, 없을 때]
+  const JOSA_PAIRS = [['으로', '로'], ['이랑', '랑'], ['이나', '나'], ['을', '를'], ['은', '는'], ['과', '와'], ['이', '가']];
+  const SPACE_JOSA = ['에서는', '에서도', '에게는', '에서', '에게', '에는', '에도', '을', '를', '은', '는', '에'];
+  function proofread(c, text) {
+    const fixes = [];
+    const add = (i, len, to, why) => fixes.push({ i, len, to, why });
+    // 1. 자주 틀리는 낱말
+    SPELL.forEach(([bad, good]) => {
+      let i = text.indexOf(bad);
+      while (i >= 0) { add(i, bad.length, good, `'${bad}'${josa(bad, '은')} <b>'${good}'</b>${josa(good, '이')} 바른 말이에요.`); i = text.indexOf(bad, i + bad.length); }
+    });
+    // 2. 배운 낱말: 알맞은 조사, 조사는 붙여 쓰고 그 뒤는 띄어 쓰기
+    c.words.forEach((w) => {
+      const word = plainRead(w);
+      const jong = jongOf(word.slice(-1));
+      let i = text.indexOf(word);
+      while (i >= 0) {
+        const at = i + word.length;
+        const rest = text.slice(at);
+        const pair = JOSA_PAIRS.find(([a, b]) => new RegExp(`^(${a}|${b})(?=[\\s.,!?~]|$)`).test(rest));
+        if (pair) {
+          const used = rest.match(new RegExp(`^(${pair[0]}|${pair[1]})`))[1];
+          const right = pair[0] === '으로' ? (jong && jong !== 8 ? '으로' : '로') : (jong ? pair[0] : pair[1]);
+          if (used !== right) add(at, used.length, right, `'${word}' 뒤에는 <b>'${right}'</b>${josa(right, '이')} 어울려요. (${word}${right})`);
+        }
+        const sp = rest.match(/^ +/);
+        if (sp && SPACE_JOSA.concat(['가', '와', '과', '도', '의', '로', '으로', '만']).some((j) => new RegExp(`^ +${j}(?=[\\s.,!?~]|$)`).test(rest))) {
+          add(at, sp[0].length, '', `조사는 앞말에 <b>붙여 써요</b>. (${word}${rest.slice(sp[0].length).match(/^[가-힣]+/)[0]})`);
+        }
+        const ey = rest.match(/^(이에요|예요|에요)(?=[\s.,!?~]|$)/);
+        if (ey && ey[1] !== (jong ? '이에요' : '예요')) add(at, ey[1].length, jong ? '이에요' : '예요', `'${word}' 뒤에는 <b>'${jong ? '이에요' : '예요'}'</b>를 써요. (${word}${jong ? '이에요' : '예요'})`);
+        const j = SPACE_JOSA.find((x) => rest.startsWith(x));
+        if (j && /^[가-힣]/.test(rest.slice(j.length)) && !(j === '에' && rest[1] === '요')) {
+          add(at + j.length, 0, ' ', `'${word}${j}' 다음은 <b>띄어 써요</b>.`);
+        }
+        i = text.indexOf(word, at);
+      }
+    });
+    // 띄어 쓴 조사: 선생님 께서 → 선생님께서
+    const re0 = /([가-힣]+) +(께서|에게서|에게|한테|에서는|에서)(?=[\s.,!?~]|$)/g;
+    let m0;
+    while ((m0 = re0.exec(text))) add(m0.index + m0[1].length, m0[0].length - m0[1].length - m0[2].length, '', `조사는 앞말에 <b>붙여 써요</b>. (${m0[1]}${m0[2]})`);
+    // 3. 문장 부호: 부호 앞 빈칸은 지우고, 글 끝에는 마침표
+    let m;
+    const re = / +(?=[.,!?])/g;
+    while ((m = re.exec(text))) add(m.index, m[0].length, '', '문장 부호는 앞말에 <b>붙여 써요</b>.');
+    const re2 = / {2,}/g;
+    while ((m = re2.exec(text))) add(m.index + 1, m[0].length - 1, '', '빈칸은 <b>한 칸만</b> 띄어요.');
+    if (/[가-힣a-zA-Z0-9)]$/.test(text)) add(text.length, 0, '.', '문장 끝에는 <b>마침표(.)</b>를 찍어요.');
+    // 겹치는 것은 앞의 것만
+    fixes.sort((a, b) => a.i - b.i || b.len - a.len);
+    const list = [];
+    fixes.forEach((f) => { const last = list[list.length - 1]; if (!last || f.i >= last.i + last.len + (last.len ? 0 : 1) || (f.i === last.i + last.len && f.len)) list.push(f); });
+    let fixed = '';
+    let html = '';
+    let k = 0;
+    list.forEach((f) => {
+      fixed += text.slice(k, f.i) + f.to;
+      html += esc(text.slice(k, f.i));
+      const from = text.slice(f.i, f.i + f.len);
+      if (from) html += from.trim() ? `<del>${esc(from)}</del>` : '<del class="sp" title="붙여 써요">⌒</del>';
+      if (f.to) html += f.to === ' ' ? '<ins class="sp" title="띄어 써요">∨</ins>' : `<ins>${esc(f.to)}</ins>`;
+      k = f.i + f.len;
+    });
+    fixed += text.slice(k);
+    html += esc(text.slice(k));
+    const hints = [];
+    if (text.length >= 12 && !/\s/.test(text)) hints.push('낱말과 낱말 사이를 <b>띄어 써</b> 보세요.');
+    const used = c.words.filter((w) => text.replace(/\s/g, '').includes(plainRead(w)));
+    const good = [];
+    if (used.length > 1) good.push(`배운 낱말을 <b>${used.length}개</b>나 넣었어요! (${used.map((w) => w.read).join(', ')})`);
+    else if (used.length) good.push(`배운 낱말 '<b>${used[0].read}</b>'${josa(used[0].read, '을')} 넣어 썼어요.`);
+    if (text.length >= 25) good.push('자세하게 잘 썼어요.');
+    return { fixes: list, fixed, html, hints, good, used };
+  }
+  function proofHtml(c, text) {
+    const r = proofread(c, text);
+    const whys = [...new Set(r.fixes.map((f) => f.why))];
+    const w = r.used[0] || c.words[0];
+    return `<div class="proof">
+      <div class="pf-title">✏️ 첨삭</div>
+      ${r.good.map((g) => `<div class="pf-good">👍 ${g}</div>`).join('')}
+      ${r.fixes.length ? `<div class="pf-text">${r.html}</div>
+        <ul class="pf-why">${whys.map((x) => `<li>${x}</li>`).join('')}</ul>` : '<div class="pf-good">🎉 고칠 곳을 찾지 못했어요. 맞춤법과 띄어쓰기가 훌륭해요!</div>'}
+      ${r.hints.map((h) => `<div class="pf-hint">💡 ${h}</div>`).join('')}
+      <div class="pf-hint">🔎 '<b>${w.read}</b>'의 뜻은 '${w.mean}'${josa(w.mean, '이에요')}. 뜻에 맞게 썼는지 소리 내어 읽어 보세요.</div>
+      ${r.fixes.length ? '<button type="button" class="btn ghost block" id="apply">✏️ 고친 대로 바꾸기</button>' : ''}
+    </div>`;
+  }
   function renderWrite(step) {
     const c = C(step.idx);
     const chips = c.words.map((w) => `<button type="button" class="chip" data-read="${w.read}"><b>${w.read}</b><small>${w.mean}</small></button>`).join('');
@@ -1529,21 +1630,38 @@
       <p class="guide">오늘 배운 낱말을 <b>하나 이상</b> 넣어 짧은 글을 지어 보세요. 낱말을 누르면 글에 들어가요.</p>
       <div class="chips">${chips}</div>
       <textarea id="text" class="text-input" rows="3" maxlength="200" placeholder="예) ${esc(c.ex.replace(/\([^)]*\)/, ''))}">${esc(step.text)}</textarea>
-      <div id="fb"></div>
-      <button class="btn block big" id="save">글 저장하고 다음 →</button>
+      <div id="fb">${step.checked && step.checked === step.text ? proofHtml(c, step.text.trim()) : ''}</div>
+      <button class="btn block big" id="save">${step.checked && step.checked === step.text ? '글 저장하고 다음 →' : '다 썼어요! 첨삭 받기'}</button>
     </div>`;
   }
   function bindWrite(step) {
     const c = C(step.idx);
     const ta = document.getElementById('text');
-    ta.addEventListener('input', () => { step.text = ta.value; });
+    const saveBtn = document.getElementById('save');
+    // 글을 고치면 다시 첨삭을 받아요
+    const edited = () => {
+      step.text = ta.value;
+      if (step.checked && step.checked !== step.text) { step.checked = null; document.getElementById('fb').innerHTML = ''; saveBtn.textContent = '다 썼어요! 첨삭 받기'; }
+    };
+    ta.addEventListener('input', edited);
+    const bindApply = () => {
+      const ap = document.getElementById('apply');
+      if (ap) ap.addEventListener('click', () => {
+        ta.value = proofread(c, ta.value.trim()).fixed;
+        step.text = ta.value;
+        step.checked = step.text;
+        document.getElementById('fb').innerHTML = proofHtml(c, step.text);
+        bindApply();
+      });
+    };
+    bindApply();
     $app.querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => {
       const pos = ta.selectionStart ?? ta.value.length;
       ta.value = ta.value.slice(0, pos) + b.dataset.read + ta.value.slice(ta.selectionEnd ?? pos);
-      step.text = ta.value;
+      edited();
       ta.focus();
     }));
-    document.getElementById('save').addEventListener('click', () => {
+    saveBtn.addEventListener('click', () => {
       const text = ta.value.trim();
       const fb = document.getElementById('fb');
       if (text.length < 5) {
@@ -1553,6 +1671,16 @@
       const w = usedWord(c, text);
       if (!w) {
         fb.innerHTML = `<div class="feedback no">배운 낱말(${c.words.map((x) => x.read).join(', ')}) 가운데 하나를 넣어 써 보세요.</div>`;
+        return;
+      }
+      if (step.checked !== ta.value) {
+        // 먼저 첨삭을 보여 주고, 한 번 더 누르면 저장해요
+        step.text = ta.value;
+        step.checked = ta.value;
+        fb.innerHTML = proofHtml(c, text);
+        saveBtn.textContent = '글 저장하고 다음 →';
+        bindApply();
+        fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         return;
       }
       const ds = session.date;
@@ -1600,7 +1728,7 @@
       const chars = w.native
         ? `<div class="ic-native"><span class="tag-red">우리말(고유어)</span><small>한자가 아니에요</small></div>`
         : `<div class="wchars">${wordParts(w).map((p) => {
-          const cls = good && p.ch === c.h ? ' good' : !good && look && p.ch === look.ch ? ' bad' : '';
+          const cls = good && p.ch === c.h ? ' good blink' : !good && look && p.ch === look.ch ? ' bad blink' : '';
           return `<span class="wc${cls}"><b class="hanja">${p.ch}</b><small>${p.m} <strong>${p.s}</strong></small></span>`;
         }).join('')}</div>`;
       return `<div class="icard ${good ? 'ok' : 'no'}${w.read === step.chosen ? ' picked' : ''}">
