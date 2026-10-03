@@ -879,7 +879,8 @@
     const entry = S.log[ds];
     const left = queueLeft();
     const redoN = (S.redo || []).length;
-    const head = `<div class="dayname">${g.name} · 공부할 한자 ${left}자 남음${redoN ? ` (다시 배울 한자 ${redoN}자 포함)` : ''}</div>`;
+    const head = `<div class="dayname">공부할 한자 ${left}자 남음</div>${redoN
+      ? `<div class="dayname redo-line">다시 배울 한자 : <span class="hanja">${S.redo.map((r) => C(r.idx).h).join(' ')}</span></div>` : ''}`;
     // 주말: 쉬어도 되고, 하고 싶으면 오늘의 한자를 배울 수 있어요
     const weekend = !isWeekday(t);
     const wk = weekend ? learnedInWeek(t) : [];
@@ -904,7 +905,6 @@
         ${todays.length ? `<div class="today-chars">${todays.map((i, k) => `<button class="tc" data-carousel="${k}"><span class="hanja">${C(i).h}</span><small>${hunum(C(i))}</small></button>`).join('')}</div>` : ''}
         <p class="muted">${t.getDay() === 5 ? '한 주 동안 수고했어요! 주말엔 푹 쉬어요.' : weekend ? '주말에도 공부했어요! 정말 멋져요.' : '잘했어요! 내일 아침에 복습으로 다시 만나요.'}</p>
         ${nextNewIdx() !== null ? `<a class="btn ghost block" href="#/extra">➕ 한 자 더 배우기</a>` : ''}
-        ${(S.redo || []).length ? `<p class="small">🔁 다시 배울 한자: <span class="hanja">${S.redo.map((r) => C(r.idx).h).join(' ')}</span> (다음 학습일)</p>` : ''}
         <div class="btn-row">
           ${todays.length ? `<button class="btn soft" data-carousel="0">📖 다시 보기${todays.length > 1 ? ` (${todays.length}자)` : ''}</button>` : ''}
           <a class="btn soft" href="#/review">자유 복습</a>

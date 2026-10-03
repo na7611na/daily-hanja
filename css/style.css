@@ -673,3 +673,5 @@ ol.plain li { margin: 4px 0; }
 /* 의미 덩어리는 한 줄에 (js/wrap.js) — 칸보다 길면 그 안에서만 줄을 바꿔요 */
 .ck { display: inline-block; max-width: 100%; text-indent: 0; }
 .guide, .prompt, .qhint, .muted, .small, .feedback, .explain, p { text-wrap: pretty; }
+.hero .redo-line { font-size: 16px; color: var(--accent-dark); }
+.hero .redo-line .hanja { font-size: 20px; }
