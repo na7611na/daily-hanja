@@ -675,3 +675,6 @@ ol.plain li { margin: 4px 0; }
 .guide, .prompt, .qhint, .muted, .small, .feedback, .explain, p { text-wrap: pretty; }
 .hero .redo-line { font-size: 16px; color: var(--accent-dark); }
 .hero .redo-line .hanja { font-size: 20px; }
+/* 나란히 놓인 버튼의 글자는 한 줄로 (좁은 화면에서는 글자를 조금 줄여요) */
+.btn-row .btn { white-space: nowrap; min-width: 0; padding-left: 10px; padding-right: 10px; font-size: clamp(14px, 4.4vw, 18px); }
+.btn-row .btn .ck { display: inline; }
