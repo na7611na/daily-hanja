@@ -664,7 +664,7 @@ ol.plain li { margin: 4px 0; }
   pointer-events: none; z-index: 2; display: flex; align-items: center; justify-content: center;
 }
 .mark img { display: block; max-width: 100%; max-height: 100%; user-select: none; }
-.mark.no { left: 30%; }
+.mark.no { left: max(72px, 18%); }
 .mark.no img { width: 82%; }
 /* 색연필로 쓱 긋는 모습: 동그라미는 한 바퀴 돌며, 빗금은 왼쪽 아래에서 오른쪽 위로 그어져요 */
 @property --sweep { syntax: '<angle>'; inherits: false; initial-value: 360deg; }
