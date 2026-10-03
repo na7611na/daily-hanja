@@ -262,9 +262,11 @@
     const mon = mondayOf(d);
     return [0, 1, 2, 3, 4].map((n) => fmt(addDays(mon, n)));
   }
+  // 일주일 복습: 지난 토요일부터 이번 금요일까지 배운 한자 (주말에 배운 한자는 다음 주 금요일에 복습)
   function learnedInWeek(d) {
     const days = weekDates(d);
-    return S.order.filter((i) => S.learned[i] >= days[0] && S.learned[i] <= days[4]);
+    const from = fmt(addDays(parseDate(days[0]), -2));
+    return S.order.filter((i) => S.learned[i] >= from && S.learned[i] <= days[4]);
   }
 
 
@@ -273,11 +275,9 @@
     let n = 0;
     if (!(st.log[fmt(d)] && st.log[fmt(d)].done)) d = addDays(d, -1);
     for (let guard = 0; guard < 4000; guard++) {
-      if (isWeekday(d)) {
-        const e = st.log[fmt(d)];
-        if (e && e.done) n++;
-        else break;
-      }
+      const e = st.log[fmt(d)];
+      if (e && e.done) n++;
+      else if (isWeekday(d)) break; // 주말은 쉬어도 끊기지 않고, 공부하면 더해요
       d = addDays(d, -1);
     }
     return n;
@@ -510,7 +510,7 @@
   // 입장할 때 함께 하는 '어제 배운 한자 복습'(+ 틀렸던 한자): 평일, 공부 중이고 오늘 학습을 아직 안 했을 때
   function yesterdayReviews() {
     const t = today();
-    if (S.phase !== 'study' || !isWeekday(t)) return [];
+    if (S.phase !== 'study') return [];
     const e = S.log[fmt(t)];
     if (e && (e.done || (e.reviews && S.learned[e.newIdx] === fmt(t)))) return []; // 오늘 학습을 이미 시작했으면 빼요
     return planToday().reviews;
@@ -874,13 +874,19 @@
     const left = queueLeft();
     const redoN = (S.redo || []).length;
     const head = `<div class="dayname">${g.name} · 공부할 한자 ${left}자 남음${redoN ? ` (다시 배울 한자 ${redoN}자 포함)` : ''}</div>`;
-    if (!isWeekday(t)) {
-      const wk = learnedInWeek(t);
+    // 주말: 쉬어도 되고, 하고 싶으면 오늘의 한자를 배울 수 있어요
+    const weekend = !isWeekday(t);
+    const wk = weekend ? learnedInWeek(t) : [];
+    const weekendNote = weekend ? `<div class="card notice weekend-note">
+        <p>😊 주말은 쉬어도 괜찮아요. <b>하고 싶다면</b> 오늘의 한자를 배워 봐요!</p>
+        ${wk.length >= 2 && !S.weekly[fmt(mondayOf(t))] ? `<p class="small">이번 주 <b>일주일 복습</b>을 아직 안 했어요.</p><a class="btn soft block" href="#/weekly">⭐ 일주일 복습 하기</a>` : ''}
+      </div>` : '';
+    if (weekend && nextNewIdx() === null && !(entry && entry.done)) {
       return `<div class="card hero">
         <div class="big-hanja">休</div>
         <div class="hunum-read">쉴 휴</div>
-        <p class="muted">주말은 쉬는 날이에요. 월요일 아침에 새 한자로 만나요! 😊</p>
-        ${wk.length >= 2 && !S.weekly[fmt(mondayOf(t))] ? `<p class="small">이번 주 <b>일주일 복습</b>을 아직 안 했어요.</p><a class="btn block" href="#/weekly">⭐ 일주일 복습 하기</a>` : ''}
+        <p class="muted">지금은 새로 배울 한자가 없어요. 주말엔 푹 쉬어요! 😊</p>
+        ${wk.length >= 2 && !S.weekly[fmt(mondayOf(t))] ? `<a class="btn block" href="#/weekly">⭐ 일주일 복습 하기</a>` : ''}
         ${S.order.length ? `<a class="btn soft block" href="#/review" style="margin-top:10px">🎲 자유 복습 (5문제)</a>` : ''}
       </div>`;
     }
@@ -890,7 +896,7 @@
         ${head}
         <div class="dayname">${DAY[t.getDay()]}요일 학습 완료! 🎉</div>
         ${todays.length ? `<div class="today-chars">${todays.map((i, k) => `<button class="tc" data-carousel="${k}"><span class="hanja">${C(i).h}</span><small>${hunum(C(i))}</small></button>`).join('')}</div>` : ''}
-        <p class="muted">${t.getDay() === 5 ? '한 주 동안 수고했어요! 주말엔 푹 쉬어요.' : '잘했어요! 내일 아침에 복습으로 다시 만나요.'}</p>
+        <p class="muted">${t.getDay() === 5 ? '한 주 동안 수고했어요! 주말엔 푹 쉬어요.' : weekend ? '주말에도 공부했어요! 정말 멋져요.' : '잘했어요! 내일 아침에 복습으로 다시 만나요.'}</p>
         ${nextNewIdx() !== null ? `<a class="btn ghost block" href="#/extra">➕ 한 자 더 배우기</a>` : ''}
         ${(S.redo || []).length ? `<p class="small">🔁 다시 배울 한자: <span class="hanja">${S.redo.map((r) => C(r.idx).h).join(' ')}</span> (다음 학습일)</p>` : ''}
         <div class="btn-row">
@@ -909,7 +915,7 @@
       rows.push([st.e, st.n, `${st.t}${st.sub ? ` <span class="muted">· ${st.sub}</span>` : ''}`, st.c]);
     });
     if (plan.week.length) rows.push(['⭐', '', `일주일 복습 · 이번 주 ${plan.week.length}자`, 'week']);
-    return `<div class="card hero today-card">
+    return `${weekendNote}<div class="card hero today-card">
       ${head}
       <div class="big-hanja mystery">${started || isRedo(c.idx) ? c.h : '?'}</div>
       <p class="muted">${isRedo(c.idx) ? `🔁 지난번에 틀린 문제가 있던 '${hunum(c)}'를 다시 배워요.` : started ? '하던 학습을 이어서 해요.' : '오늘은 어떤 한자를 만날까요?'}</p>
@@ -963,7 +969,7 @@
     main += phaseCard(t);
     // 학습 완료 카드가 없는 단계(급수 시험 볼 차례 등)에서도 오늘 배운 한자를 다시 볼 수 있게
     const ent = S.log[fmt(t)];
-    if (!(S.phase === 'study' && isWeekday(t) && ent && ent.done)) main += todayCharsCard(t);
+    if (!(S.phase === 'study' && ent && ent.done)) main += todayCharsCard(t);
 
     const g = curGrade();
     const total = g.end - g.start;
@@ -1004,7 +1010,7 @@
     const t = today();
     if (kind === 'lesson') {
       const e = S.log[fmt(t)];
-      if (!isWeekday(t) || (e && e.done) || (S.phase !== 'study' && !(e && e.newIdx !== null && e.newIdx !== undefined))) { location.hash = '#/'; return; }
+      if ((e && e.done) || (S.phase !== 'study' && !(e && e.newIdx !== null && e.newIdx !== undefined))) { location.hash = '#/'; return; }
       if (!session || session.type !== 'lesson' || session.date !== fmt(t)) session = buildLesson();
     } else if (kind === 'extra') {
       const e = S.log[fmt(t)];
