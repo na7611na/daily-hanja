@@ -734,3 +734,6 @@ ol.plain li { margin: 4px 0; }
 /* 이번 주 학습 현황: 금요일 위 표시 (제목 줄과 겹쳐도 괜찮아요) */
 .week .d { position: relative; }
 .week .d .wk-tag { position: absolute; left: 50%; top: -20px; transform: translateX(-50%); margin: 0; }
+.read-box { width: 100%; }
+.rec-btn { display: block; width: 100%; white-space: nowrap; text-align: center; font-size: clamp(15px, 4.6vw, 19px); padding-left: 10px; padding-right: 10px; }
+.rec-btn .ck { display: inline; }

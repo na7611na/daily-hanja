@@ -700,7 +700,7 @@
       if (!learn) return `<div class="hb${cls}"><span class="hb-l">${label}</span><b>${text}</b></div>`;
       const st = k < learn.heard ? ' heard' : k === learn.heard ? ' next' : '';
       return `<button type="button" class="hb say${cls}${st}" data-say="${k}" aria-label="${label} ${text} 듣기">
-        <span class="hb-l">${label} <span class="spk" aria-hidden="true">🔊</span></span>${st === ' next' ? '<span class="hb-tap">눌러요</span>' : ''}<b>${text}</b>${k < learn.heard ? '<span class="hb-ok">✔</span>' : ''}</button>`;
+        <span class="hb-l">${label}</span>${st === ' next' ? '<span class="hb-tap">눌러요</span>' : ''}<b>${text}</b>${k < learn.heard ? '<span class="hb-ok">✔</span>' : ''}</button>`;
     };
     return `
       <div class="char-card">
@@ -1214,7 +1214,7 @@
     if (allHeard) {
       // 소리 내어 읽도록 이끄는 버튼 (녹음은 하지 않아요): 누르면 2초 동안 막대가 채워져요
       rec = `<div class="read-box">
-        <button type="button" class="btn rec-btn" id="rec" ${step.recording || step.recorded ? 'disabled' : ''}>${step.recorded ? '잘 읽었어요!' : '뜻과 소리를 소리 내어 읽어 보세요'}</button>
+        <button type="button" class="btn rec-btn" id="rec" ${step.recording || step.recorded ? 'disabled' : ''}>뜻과 소리를 소리 내어 읽어 보세요</button>
         <div class="rec-bar${step.recording ? ' on' : ''}${step.recorded ? ' full' : ''}" aria-hidden="true"><span></span></div>
         <div id="recmsg" class="small muted">${step.recording ? `"${hunum(c)}" 소리 내어 읽어요…` : ''}</div>
       </div>`;
