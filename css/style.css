@@ -681,3 +681,7 @@ ol.plain li { margin: 4px 0; }
 /* 나란히 놓인 버튼의 글자는 한 줄로 (좁은 화면에서는 글자를 조금 줄여요) */
 .btn-row .btn { white-space: nowrap; min-width: 0; padding-left: 10px; padding-right: 10px; font-size: clamp(14px, 4.4vw, 18px); }
 .btn-row .btn .ck { display: inline; }
+/* 통계 칸: 숫자 한 줄 + 이름 한 줄 */
+.stats > div { padding: 10px 2px; min-width: 0; }
+.stats span { display: block; white-space: nowrap; font-size: clamp(11px, 3.4vw, 14px); }
+.stats b small { font-size: .6em; margin-right: 3px; vertical-align: .15em; }

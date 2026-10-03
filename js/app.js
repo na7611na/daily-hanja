@@ -1002,9 +1002,9 @@
       </div>
       <div class="card">
         <div class="stats">
-          <div><b>${streak()}</b><span>🔥 연속 학습일</span></div>
-          <div><b>${Object.keys(S.known).length}</b><span>💡 이미 아는 한자</span></div>
-          <div><b>${S.order.length}</b><span>📚 공부한 한자</span></div>
+          <div><b><small>🔥</small>${streak()}</b><span>연속 학습일</span></div>
+          <div><b><small>💡</small>${Object.keys(S.known).length}</b><span>이미 아는 한자</span></div>
+          <div><b><small>📚</small>${S.order.length}</b><span>공부한 한자</span></div>
         </div>
         <div class="row" style="margin-top:16px"><b>${g.name}</b><span class="spacer"></span>
           <span class="small muted">아는 ${knownN} + 공부 ${learnedN} / ${total}자</span></div>
