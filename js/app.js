@@ -683,6 +683,10 @@
       <h3 class="sec-title">활용 어휘</h3>
       <div class="words">${words}</div>`;
   }
+  // 시험지처럼 문제 위에 크게 찍는 채점 표시 (맞으면 동그라미, 틀리면 빗금)
+  const stampHtml = (ok) => `<span class="mark ${ok ? 'ok' : 'no'}" role="img" aria-label="${ok ? '맞았어요' : '틀렸어요'}">${ok
+    ? '<svg viewBox="0 0 100 100"><path d="M50 8c24 0 42 17 42 41 0 25-19 43-43 43C25 92 8 74 9 50 10 26 28 9 54 9" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/></svg>'
+    : '<svg viewBox="0 0 100 100"><path d="M14 52 L38 80 L88 14" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>'}</span>`;
   // 한자어에서 소리가 바뀌어 굳어진 말 등의 설명
   const noteHtml = (w) => (w.note ? `<div class="word-note">💡 ${w.note}</div>` : '');
   function charHeadHtml(c) {
@@ -1001,7 +1005,10 @@
           <span class="small muted">아는 ${knownN} + 공부 ${learnedN} / ${total}자</span></div>
         <div class="progress two" style="margin-top:6px"><span class="k" style="width:${(knownN / total) * 100}%"></span><span style="width:${(learnedN / total) * 100}%"></span></div>
       </div>`;
-    $app.innerHTML = `${main}<p class="maker">만든이 ㅊㅂㄹ</p>`;
+    const tSec = todaySecs();
+    const timeBar = `<div class="home-time"><span>⏱ 오늘 공부한 시간 <b>${fmtTime(tSec)}</b></span>
+      <span class="muted">모두 ${fmtTime(totalSecs())}</span>${tSec >= CHEER_AT ? '<span class="ht-ok">🌟 오늘 목표 5분 달성!</span>' : ''}</div>`;
+    $app.innerHTML = `${timeBar}${main}<p class="maker">만든이 ㅊㅂㄹ</p>`;
     bindOpen();
     const todays = todaysNew(t);
     $app.querySelectorAll('[data-carousel]').forEach((b) => b.addEventListener('click', () => openCarousel(todays, +b.dataset.carousel)));
@@ -1244,10 +1251,26 @@
           <b>${w.read}</b> = ${wordParts(w).map((p) => `${p.m} ${p.s}`).join(' + ')}</div>`;
         step.selL = step.selR = null;
         setTimeout(() => { [L, R].forEach((x) => x.classList.remove('shake', 'bad', 'sel')); }, 600);
+        // 아무거나 눌러 맞히지 않도록 3초 동안 멈춰요 (그동안 음훈을 읽어 봐요)
+        const board = document.getElementById('mboard');
+        board.classList.add('locked');
+        let n = 3;
+        const fb = document.getElementById('fb');
+        fb.insertAdjacentHTML('beforeend', `<div class="lock-msg">⏳ 음훈을 읽고 생각해 봐요 <b id="lockn">${n}</b></div>`);
+        const t = setInterval(() => {
+          n--;
+          const el = document.getElementById('lockn');
+          if (n > 0 && el) { el.textContent = n; return; }
+          clearInterval(t);
+          board.classList.remove('locked');
+          const m = fb.querySelector('.lock-msg');
+          if (m) m.remove();
+        }, 1000);
       }
     };
-    $app.querySelectorAll('[data-w]').forEach((b) => b.addEventListener('click', () => { step.selL = +b.dataset.w; tryPair(); }));
-    $app.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { step.selR = +b.dataset.m; tryPair(); }));
+    const locked = () => document.getElementById('mboard').classList.contains('locked');
+    $app.querySelectorAll('[data-w]').forEach((b) => b.addEventListener('click', () => { if (locked()) return; step.selL = +b.dataset.w; tryPair(); }));
+    $app.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { if (locked()) return; step.selR = +b.dataset.m; tryPair(); }));
   }
 
   // 3. 활용 어휘 ② — 빈칸에 알맞은 어휘 넣기
@@ -1256,7 +1279,8 @@
     const all = step.filled.length === c.words.length;
     const bank = c.words.map((w, k) => {
       const used = step.filled.includes(k);
-      return `<button class="chip bank${used ? ' used' : ''}" data-k="${k}" ${used || all ? 'disabled' : ''}>
+      // 쓴 보기도 그대로 남겨 두어, 마지막 빈칸도 4개 가운데에서 골라야 해요
+      return `<button class="chip bank${used ? ' used' : ''}" data-k="${k}" ${all ? 'disabled' : ''}>
         <b>${w.read}</b><small class="hanja">${w.word}</small></button>`;
     }).join('');
     const items = step.order.map((k, n) => {
@@ -1292,14 +1316,16 @@
         const w = c.words[k];
         b.classList.add('shake', 'bad');
         setTimeout(() => b.classList.remove('shake', 'bad'), 600);
-        document.getElementById('fb').innerHTML = `<div class="feedback no">🤔 '<b>${w.read}</b>'은(는) '${w.mean}'이라는 뜻이에요. 이 문장에 어울리는지 다시 생각해 봐요.</div>`;
+        document.getElementById('fb').innerHTML = step.filled.includes(k)
+          ? `<div class="feedback no">🤔 '<b>${w.read}</b>'은(는) 이미 다른 빈칸에 넣었어요. 문장을 다시 읽어 봐요.</div>`
+          : `<div class="feedback no">🤔 '<b>${w.read}</b>'은(는) '${w.mean}'이라는 뜻이에요. 이 문장에 어울리는지 다시 생각해 봐요.</div>`;
       }
     }));
   }
 
   // 4. 확인하기 — 한글 어휘의 표시된 글자에 쓰인 한자의 뜻과 음 쓰기 (바로 채점, 틀리면 해설)
-  function wordQuestionHtml(c, w) {
-    return `<div class="quiz-q">
+  function wordQuestionHtml(c, w, mark = '') {
+    return `<div class="quiz-q${mark ? ' graded' : ''}">${mark}
         <div class="qword">${hangulMarked(c, w)}</div>
         <div class="qhint">뜻: ${w.mean}</div>
         <div class="prompt"><mark>색으로 표시된 글자</mark>에 쓰인 한자의 <b>뜻(훈)</b>과 <b>음</b>을 쓰세요.</div>
@@ -1311,7 +1337,7 @@
     const nextLabel = next.kind === 'check' ? '다음 문제 →' : next.kind === 'infer' ? '추론하기 →' : '다음 →';
     return `<div class="card lesson-card">${stageHtml(step.stage)}
       ${step.old ? `<p class="small muted center">${c.gradeName}에서 공부한 한자예요</p>` : ''}
-      ${wordQuestionHtml(c, step.word)}
+      ${wordQuestionHtml(c, step.word, step.graded ? stampHtml(step.ok) : '')}
       <form id="f" autocomplete="off">
         <div class="exam-inputs">
           <div><label for="m">뜻 (훈)</label><input id="m" lang="ko" value="${esc(step.m)}" ${step.graded ? 'readonly' : ''}></div>
@@ -1327,13 +1353,12 @@
     const w = step.word;
     const { syl } = targetPos(c, w);
     const own = charHunum(c.h, syl);
-    if (step.ok) return `<div class="feedback ok">⭕ 정답이에요! '${w.read}'의 '${syl}'은(는) <b>${own.m} ${own.s}</b>(<span class="hj">${c.h}</span>)예요.</div>`;
+    if (step.ok) return `<div class="explain"><div class="solve">'${w.read}'의 '${syl}'은(는) <b>${own.m} ${own.s}</b>(<span class="hj">${c.h}</span>)예요.</div></div>`;
     const why = [];
     if (!step.okM) why.push(`뜻을 '<b>${esc(step.m)}</b>'(이)라고 썼어요. 이 글자의 뜻(훈)은 '<b>${c.meanings.join(', ')}</b>'이에요.`);
     if (!step.okS) why.push(`음을 '<b>${esc(step.s)}</b>'(이)라고 썼어요. 이 글자의 소리(음)는 '<b>${c.sounds.join(', ')}</b>'이에요.`);
     if (!c.sounds.includes(syl)) why.push(`'${w.read}'에서는 '${syl}'(으)로 읽지만 본래 소리는 '${c.sounds[0]}'이에요. (두음 법칙)`);
-    return `<div class="feedback no">❌ 정답은 <b>${own.m} ${own.s}</b>(<span class="hj">${c.h}</span>)예요.</div>
-      <div class="explain"><div class="why"><b>틀린 까닭</b> ${why.join(' ')}</div>
+    return `<div class="explain"><div class="answer">정답 <b>${own.m} ${own.s}</b>(<span class="hj">${c.h}</span>)</div><div class="why"><b>틀린 까닭</b> ${why.join(' ')}</div>
       <div class="solve"><b>해설</b> ${breakdown(w)}<br>'${w.read}'의 '${targetPos(c, w).syl}'은(는) <span class="hj">${c.h}</span>(${own.m} ${own.s})예요.</div></div>`;
   }
   function bindCheck(step) {
@@ -1421,16 +1446,19 @@
       return `<button class="opt big-opt${cls}" data-k="${k}" ${answered ? 'disabled' : ''}><span class="opt-n">${k + 1}</span>${w.read}</button>`;
     }).join('');
     return `<div class="card lesson-card">${stageHtml('infer')}
-      <div class="quiz-q">
+      <div class="quiz-q${answered ? ' graded' : ''}">${answered ? stampHtml(step.chosen === step.answer) : ''}
         <div class="today-chip"><span class="hanja">${c.h}</span> ${hunum(c)}</div>
         <div class="prompt">오늘의 한자 '<b>${hunum(c)}</b>'가 <b class="pos">쓰인</b> 어휘는 무엇일까요?</div>
         <div class="qhint">단어의 뜻을 생각해 보며 짐작해 보세요!</div>
       </div>
       <div class="options two">${opts}</div>
       <div id="fb">${answered ? inferFeedback(step) : ''}</div>
-      ${answered ? nextBtn('적용하기 →') : ''}
+      ${answered ? `<button class="btn block big" id="next" ${waitLeft(step) ? 'disabled' : ''}>${waitLeft(step) ? `해설을 읽어 봐요 (<span id="wait">${waitLeft(step)}</span>)` : '적용하기 →'}</button>` : ''}
     </div>`;
   }
+  // 해설을 읽도록 '다음' 버튼은 몇 초 뒤에 눌러져요
+  const READ_WAIT = 5;
+  const waitLeft = (step) => (step.readyAt ? Math.max(0, Math.ceil((step.readyAt - Date.now()) / 1000)) : 0);
   // 해설: 두 보기를 나란히 놓고, 오늘 한자의 음훈은 초록, 소리만 같은 다른 한자(또는 우리말)는 빨강으로 표시해요.
   function inferFeedback(step) {
     const c = C(step.idx);
@@ -1454,17 +1482,30 @@
         <div class="ic-mean">${w.mean}</div>
       </div>`;
     };
-    const same = oth.native ? oth.read[0] : look ? look.s : own.s;
-    const right = oth.native ? '우리말' : look ? `${look.ch} ${look.m} ${look.s}` : '다른 한자';
-    return `<div class="feedback ${ok ? 'ok' : 'no'}">${ok ? '⭕ 정답이에요! 뜻을 잘 추론했어요.' : `❌ 정답은 '${ans.read}'예요.`}</div>
-      <div class="icards">${card(ans, true)}${card(oth, false)}</div>
-      <div class="ic-sum">같은 '<b>${same}</b>' 소리라도
-        <span class="g">${c.h} ${own.m} ${own.s}</span> ≠ <span class="r">${right}</span></div>`;
+    // 보기와 같은 순서로 놓아요
+    return `${ok ? '' : `<div class="explain"><div class="answer">정답 <b>${ans.read}</b></div></div>`}
+      <div class="icards">${step.options.map((w) => card(w, w.read === step.answer)).join('')}</div>`;
   }
   function bindInfer(step) {
-    if (step.chosen !== null) { bindNext(); return; }
+    if (step.chosen !== null) {
+      bindNext();
+      if (waitLeft(step)) {
+        const t = setInterval(() => {
+          const b = document.getElementById('next');
+          if (!b || session.steps[session.i] !== step) { clearInterval(t); return; }
+          const n = waitLeft(step);
+          if (n) { const w = document.getElementById('wait'); if (w) w.textContent = n; return; }
+          clearInterval(t);
+          b.disabled = false;
+          b.textContent = '적용하기 →';
+          b.focus({ preventScroll: true });
+        }, 250);
+      }
+      return;
+    }
     $app.querySelectorAll('.big-opt').forEach((b) => b.addEventListener('click', () => {
       step.chosen = step.options[+b.dataset.k].read;
+      step.readyAt = Date.now() + READ_WAIT * 1000;
       const ok = step.chosen === step.answer;
       score(ok, step.idx);
       if (S.log[session.date] && session.plan && step.idx === session.plan.newIdx) S.log[session.date].infer = ok;
@@ -1494,10 +1535,10 @@
     let fb = '';
     if (answered) {
       const ok = step.chosen === step.answer;
-      fb = `<div class="feedback ${ok ? 'ok' : 'no'}">${ok ? '⭕ 정답이에요!' : '❌ 아쉬워요. 다음 복습 때 다시 나와요.'}<br>${breakdown(w)}</div>${nextBtn()}`;
+      fb = `<div class="explain"><div class="solve">${breakdown(w)}${ok ? '' : '<br><span class="small">다음 복습 때 다시 나와요.</span>'}</div></div>${nextBtn()}`;
     }
     return `<div class="card lesson-card">${stageHtml(step.stage)}
-      <div class="quiz-q">${q}</div>
+      <div class="quiz-q${answered ? ' graded' : ''}">${answered ? stampHtml(step.chosen === step.answer) : ''}${q}</div>
       <div class="options">${opts}</div>
       <div id="fb">${fb}</div></div>`;
   }
