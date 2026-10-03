@@ -1299,7 +1299,7 @@
     const right = step.order.map((k) => {
       const ok = step.done.includes(k);
       return `<button class="mbox mr${ok ? ' ok' : ''}${step.selR === k ? ' sel' : ''}" data-m="${k}" ${ok ? 'disabled' : ''}>
-        <span class="dot"></span>${c.words[k].mean}</button>`;
+        <span class="dot"></span><span class="mtext">${c.words[k].mean}</span></button>`;
     }).join('');
     return `<div class="card lesson-card">${stageHtml('match')}
       <p class="guide">${all ? '🎉 모두 연결했어요!'

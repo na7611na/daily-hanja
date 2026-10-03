@@ -308,6 +308,7 @@ body.in-lesson { padding-bottom: 24px; }
 }
 .mbox.ml .dot { right: -9px; }
 .mbox.mr .dot { left: -9px; }
+.mbox .mtext { display: block; min-width: 0; }
 .mbox.sel { border-color: var(--s2); box-shadow: 0 0 0 4px var(--s2-soft), 0 3px 0 var(--s2); }
 .mbox.ok { border-color: var(--green); background: var(--green-soft); cursor: default; box-shadow: none; color: var(--ink); }
 .mbox.ok .dot { border-color: var(--green); background: var(--green); }
