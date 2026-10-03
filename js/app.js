@@ -1226,17 +1226,24 @@
       ${rec}
       ${step.recorded ? nextBtn('활용 어휘 만나러 가기 →') : ''}</div>`;
   }
-  function speak(text) {
+  // 읽어 주기. onEnd는 다 읽은 뒤(소리를 낼 수 없는 기기에서는 읽는 데 걸릴 만큼 기다린 뒤) 한 번 불러요
+  function speak(text, onEnd) {
+    let done = false;
+    const end = () => { if (!done) { done = true; if (onEnd) onEnd(); } };
+    const guess = 900 + text.replace(/\s/g, '').length * 260;
     try {
-      if (!window.speechSynthesis) return;
+      if (!window.speechSynthesis) { setTimeout(end, guess); return; }
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ko-KR';
       u.rate = 0.85;
       const v = speechSynthesis.getVoices().find((x) => /^ko/i.test(x.lang));
       if (v) u.voice = v;
+      u.onend = end;
+      u.onerror = () => setTimeout(end, guess); // 소리가 나지 않아도 읽는 시간만큼 기다려요
       speechSynthesis.speak(u);
-    } catch (e) { /* 소리를 낼 수 없는 기기 */ }
+      setTimeout(end, guess + 2500); // onend가 오지 않는 기기를 위한 안전장치
+    } catch (e) { setTimeout(end, guess); }
   }
   function bindLearn(step) {
     const c = C(step.idx);
@@ -1275,7 +1282,7 @@
     const all = step.done.length === c.words.length;
     const left = c.words.map((w, k) => {
       const ok = step.done.includes(k);
-      return `<button class="mbox ml${ok ? ' ok' : ''}${step.selL === k ? ' sel' : ''}" data-w="${k}" ${ok ? 'disabled' : ''}>
+      return `<button class="mbox ml${ok ? ' ok' : ''}${step.selL === k ? ' sel' : ''}${step.reading === k ? ' reading' : ''}" data-w="${k}" ${ok ? 'disabled' : ''}>
         ${wordCharsHtml(w, c.h)}<span class="dot"></span></button>`;
     }).join('');
     const right = step.order.map((k) => {
@@ -1284,15 +1291,15 @@
         <span class="dot"></span>${c.words[k].mean}</button>`;
     }).join('');
     return `<div class="card lesson-card">${stageHtml('match')}
-      <p class="guide">${all ? '🎉 모두 연결했어요! 한자의 <b>음훈</b>이 어휘의 <b>뜻</b>과 어떻게 이어지는지 살펴보세요.'
-        : '한자 아래 <b>음훈</b>을 힌트로 어휘와 알맞은 <b>뜻</b>을 차례로 눌러 <b>선으로 연결</b>해요.'}</p>
+      <p class="guide">${all ? '🎉 모두 연결했어요!'
+        : '<b>어휘 카드</b>를 눌러 글자마다 <b>뜻과 소리</b>를 들은 뒤, 알맞은 <b>뜻</b>을 눌러 <b>선으로 연결</b>해요.'}</p>
       <div class="mboard" id="mboard">
         <div class="mcol">${left}</div>
         <div class="mcol">${right}</div>
         <svg class="mlines" id="mlines" aria-hidden="true"></svg>
       </div>
       <div id="fb"></div>
-      ${all ? `<div class="sum-list">${c.words.map((w) => `<div>${breakdown(w)}${noteHtml(w)}</div>`).join('')}</div>${nextBtn('빈칸 채우기 →')}` : ''}
+      ${all ? nextBtn('빈칸 채우기 →') : ''}
     </div>`;
   }
   const LINE_COLORS = ['var(--s2)', 'var(--s1)', 'var(--s4)', 'var(--s3)'];
@@ -1352,8 +1359,35 @@
       }
     };
     const locked = () => document.getElementById('mboard').classList.contains('locked');
-    $app.querySelectorAll('[data-w]').forEach((b) => b.addEventListener('click', () => { if (locked()) return; step.selL = +b.dataset.w; tryPair(); }));
-    $app.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { if (locked()) return; step.selR = +b.dataset.m; tryPair(); }));
+    // 어휘 카드를 누르면 글자마다 '뜻 소리'를 읽어 주고, 다 읽으면 뜻 카드와 연결할 수 있어요
+    $app.querySelectorAll('[data-w]').forEach((b) => b.addEventListener('click', () => {
+      if (locked() || step.reading !== undefined && step.reading !== null) return;
+      const k = +b.dataset.w;
+      const w = c.words[k];
+      step.reading = k;
+      step.selL = null;
+      step.selR = null;
+      renderStep();
+      speak(wordParts(w).map((p) => `${p.m} ${p.s}`).join(', '), () => {
+        if (session.steps[session.i] !== step || step.reading !== k) return;
+        step.reading = null;
+        step.selL = k;
+        renderStep();
+      });
+    }));
+    $app.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => {
+      if (locked()) return;
+      if (step.reading !== undefined && step.reading !== null) {
+        document.getElementById('fb').innerHTML = '<div class="feedback no">👂 읽어 주는 소리를 끝까지 들어요.</div>';
+        return;
+      }
+      if (step.selL === null) {
+        document.getElementById('fb').innerHTML = '<div class="feedback no">먼저 왼쪽 <b>어휘 카드</b>를 눌러 들어 봐요.</div>';
+        return;
+      }
+      step.selR = +b.dataset.m;
+      tryPair();
+    }));
   }
 
   // 3. 활용 어휘 ② — 빈칸에 알맞은 어휘 넣기
