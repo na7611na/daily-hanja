@@ -718,14 +718,14 @@
     document.body.appendChild(back);
   }
   // 여러 한자 카드를 옆으로 넘겨 보기 (← → 버튼, 밀어서 넘기기, 키보드 화살표)
-  function openCarousel(list, start = 0) {
+  function openCarousel(list, start = 0, title = '오늘 배운 한자') {
     let k = start;
     const back = document.createElement('div');
     back.className = 'modal-back';
     const draw = () => {
       back.innerHTML = `<div class="modal carousel" role="dialog" aria-modal="true">
         <div class="car-head">
-          <span class="car-title">오늘 배운 한자 <b>${k + 1}</b> / ${list.length}</span>
+          <span class="car-title">${title} <b>${k + 1}</b> / ${list.length}</span>
           <button class="close-x" aria-label="닫기">✕</button>
         </div>
         <div class="car-body">${charCardHtml(C(list[k]))}</div>
@@ -989,8 +989,9 @@
       const e = S.log[d];
       const idx = e && e.newIdx !== null && e.newIdx !== undefined && S.learned[e.newIdx] === d ? e.newIdx : null;
       const cls = [e && e.done ? 'done' : '', d === ds ? 'today' : '', k >= 5 ? 'wkend' : ''].join(' ');
+      const dayChars = todaysNew(parseDate(d));
       const stamp = e && e.done
-        ? (idx !== null ? `<button class="cell-in stamp-btn" data-open="${idx}" aria-label="${DAY[(k + 1) % 7]}요일 출석 · ${C(idx).h} 보기">${STAMP_SVG}</button>` : `<span class="stamp-btn" aria-label="출석">${STAMP_SVG}</span>`)
+        ? (dayChars.length ? `<button class="cell-in stamp-btn" data-day="${d}" aria-label="${DAY[(k + 1) % 7]}요일 출석 · 배운 한자 ${dayChars.length}자 보기">${STAMP_SVG}</button>` : `<span class="stamp-btn" aria-label="출석">${STAMP_SVG}</span>`)
         : '';
       return `<div class="d ${cls}"><div class="lbl">${DAY[(k + 1) % 7]}</div><div class="cell">${stamp}</div></div>`;
     }).join('');
@@ -1017,6 +1018,11 @@
     bindOpen();
     const todays = todaysNew(t);
     $app.querySelectorAll('[data-carousel]').forEach((b) => b.addEventListener('click', () => openCarousel(todays, +b.dataset.carousel)));
+    // 출석 도장: 그날 배운 한자 모두 (두 자 이상이면 넘겨 보기)
+    $app.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => {
+      const d = parseDate(b.dataset.day);
+      openCarousel(todaysNew(d), 0, `${d.getMonth() + 1}월 ${d.getDate()}일 ${DAY[d.getDay()]}요일에 배운 한자`);
+    }));
   }
 
   /* ================= 화면: 학습 세션 ================= */
