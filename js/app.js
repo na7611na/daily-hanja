@@ -695,16 +695,8 @@
       <div class="words">${words}</div>`;
   }
   // 시험지처럼 문제 위에 크게 찍는 채점 표시 (맞으면 동그라미, 틀리면 빗금)
-  // 채점 표시: 선생님이 빨간 색연필로 시험지에 긋듯이 (맞으면 동그라미, 틀리면 빗금)
-  const PENCIL = `<defs><filter id="pencil" x="-10%" y="-10%" width="120%" height="120%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="n"/>
-    <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" xChannelSelector="R" yChannelSelector="G" result="d"/>
-    <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" seed="9" result="g"/>
-    <feColorMatrix in="g" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.2 0 0 0 1.5" result="ga"/>
-    <feComposite in="d" in2="ga" operator="in"/></filter></defs>`;
-  const stampHtml = (ok) => `<span class="mark ${ok ? 'ok' : 'no'}" role="img" aria-label="${ok ? '맞았어요' : '틀렸어요'}"><svg viewBox="0 0 100 100">${PENCIL}<g filter="url(#pencil)" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">${ok
-    ? '<path pathLength="1" stroke-width="6.5" d="M58 12 C 33 9, 13 27, 13 52 C 13 77, 35 91, 58 88 C 80 85, 92 66, 89 44 C 86 24, 68 12, 46 15 C 40 16, 35 18, 31 21"/><path pathLength="1" class="p2" stroke-width="2.4" opacity=".55" d="M60 15 C 36 12, 17 29, 17 53 C 18 75, 37 88, 59 85 C 78 82, 89 64, 86 45 C 83 27, 66 15, 47 18"/>'
-    : '<path pathLength="1" stroke-width="7" d="M80 10 C 66 32, 47 58, 22 90"/><path pathLength="1" class="p2" stroke-width="2.6" opacity=".55" d="M84 14 C 70 36, 51 61, 27 92"/>'}</g></svg></span>`;
+  // 채점 표시: 선생님이 빨간 색연필로 시험지에 긋듯이 (맞으면 동그라미, 틀리면 빗금) — img/mark-ok.png, img/mark-no.png
+  const stampHtml = (ok) => `<span class="mark ${ok ? 'ok' : 'no'}" role="img" aria-label="${ok ? '맞았어요' : '틀렸어요'}"><img src="img/mark-${ok ? 'ok' : 'no'}.png" alt="" draggable="false"></span>`;
   // 한자어에서 소리가 바뀌어 굳어진 말 등의 설명
   // 직접 적은 설명(WORD_NOTES) + 저절로 만드는 설명(不→부, 두음 법칙, 소리가 여럿인 한자)
   function charSounds(ch) {
