@@ -879,7 +879,7 @@
     const entry = S.log[ds];
     const left = queueLeft();
     const redoN = (S.redo || []).length;
-    const head = `<div class="dayname">공부할 한자 ${left}자 남음</div>${redoN
+    const head = `<div class="dayname">공부할 한자 <span class="ck">${left}자 남음</span></div>${redoN
       ? `<div class="dayname redo-line">다시 배울 한자 : <span class="hanja">${S.redo.map((r) => C(r.idx).h).join(' ')}</span></div>` : ''}`;
     // 주말: 쉬어도 되고, 하고 싶으면 오늘의 한자를 배울 수 있어요
     const weekend = !isWeekday(t);
@@ -900,8 +900,10 @@
     if (entry && entry.done) {
       const todays = todaysNew(t);
       return `<div class="card hero">
-        ${head}
-        <div class="dayname">${DAY[t.getDay()]}요일 학습 완료! 🎉</div>
+        <div class="done-head">
+          <div class="done-text">${head}</div>
+          <div class="done-stamp" role="img" aria-label="오늘의 학습 완료">${DONE_STAMP_SVG}</div>
+        </div>
         ${todays.length ? `<div class="today-chars">${todays.map((i, k) => `<button class="tc" data-carousel="${k}"><span class="hanja">${C(i).h}</span><small>${hunum(C(i))}</small></button>`).join('')}</div>` : ''}
         <p class="muted">${t.getDay() === 5 ? '한 주 동안 수고했어요! 주말엔 푹 쉬어요.' : weekend ? '주말에도 공부했어요! 정말 멋져요.' : '잘했어요! 내일 아침에 복습으로 다시 만나요.'}</p>
         ${nextNewIdx() !== null ? `<a class="btn ghost block" href="#/extra">➕ 한 자 더 배우기</a>` : ''}
@@ -993,12 +995,13 @@
       const stamp = e && e.done
         ? (dayChars.length ? `<button class="cell-in stamp-btn" data-day="${d}" aria-label="${DAY[(k + 1) % 7]}요일 출석 · 배운 한자 ${dayChars.length}자 보기">${STAMP_SVG}</button>` : `<span class="stamp-btn" aria-label="출석">${STAMP_SVG}</span>`)
         : '';
-      return `<div class="d ${cls}"><div class="lbl">${DAY[(k + 1) % 7]}</div><div class="cell">${stamp}</div></div>`;
+      // 금요일: 일주일 복습 하는 날 (마치면 ✔)
+      const wk = k === 4 ? (S.weekly[fmt(mon)] ? '<div class="wk-tag done">복습 ✔</div>' : '<div class="wk-tag">복습 날</div>') : '';
+      return `<div class="d ${cls}"><div class="lbl">${DAY[(k + 1) % 7]}</div><div class="cell">${stamp}</div>${wk}</div>`;
     }).join('');
     main += `
       <div class="card">
-        <div class="row"><h3 style="margin:0">이번 주</h3><span class="spacer"></span>
-          ${S.weekly[fmt(mondayOf(t))] ? '<span class="pill green">일주일 복습 완료</span>' : '<span class="pill gray">금요일: 일주일 복습</span>'}</div>
+        <h3 style="margin:0">이번 주 학습 현황</h3>
         <div class="week">${cells}</div>
       </div>
       <div class="card">
@@ -1013,7 +1016,7 @@
       </div>`;
     const tSec = todaySecs();
     const timeBar = `<div class="home-time"><span>⏱ 오늘 공부한 시간 <b>${fmtTime(tSec)}</b></span>
-      <span class="muted">모두 ${fmtTime(totalSecs())}</span>${tSec >= CHEER_AT ? '<span class="ht-ok">🌟 오늘 목표 5분 달성!</span>' : ''}</div>`;
+      ${tSec >= CHEER_AT ? '<span class="ht-ok">🌟 오늘 목표 5분 달성!</span>' : ''}</div>`;
     $app.innerHTML = `${timeBar}${main}<p class="maker">만든이 ㅊㅂㄹ</p>`;
     bindOpen();
     const todays = todaysNew(t);
