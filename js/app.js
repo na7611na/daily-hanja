@@ -677,12 +677,14 @@
       <div class="word">
         ${wordCharsHtml(w, c.h)}
         <div class="word-r">${w.read}</div>
-        <div class="word-m">${w.mean}</div>
+        <div class="word-m">${w.mean}</div>${noteHtml(w)}
       </div>`).join('');
     return `${charHeadHtml(c)}
       <h3 class="sec-title">활용 어휘</h3>
       <div class="words">${words}</div>`;
   }
+  // 한자어에서 소리가 바뀌어 굳어진 말 등의 설명
+  const noteHtml = (w) => (w.note ? `<div class="word-note">💡 ${w.note}</div>` : '');
   function charHeadHtml(c) {
     const pairs = c.meanings.length === c.sounds.length
       ? c.meanings.map((m, k) => [m, c.sounds[k]]) : [[c.meanings.join(', '), c.sounds.join(', ')]];
@@ -1200,7 +1202,7 @@
         <svg class="mlines" id="mlines" aria-hidden="true"></svg>
       </div>
       <div id="fb"></div>
-      ${all ? `<div class="sum-list">${c.words.map((w) => `<div>${breakdown(w)}</div>`).join('')}</div>${nextBtn('빈칸 채우기 →')}` : ''}
+      ${all ? `<div class="sum-list">${c.words.map((w) => `<div>${breakdown(w)}${noteHtml(w)}</div>`).join('')}</div>${nextBtn('빈칸 채우기 →')}` : ''}
     </div>`;
   }
   const LINE_COLORS = ['var(--s2)', 'var(--s1)', 'var(--s4)', 'var(--s3)'];
