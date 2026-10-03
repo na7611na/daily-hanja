@@ -700,7 +700,7 @@
       if (!learn) return `<div class="hb${cls}"><span class="hb-l">${label}</span><b>${text}</b></div>`;
       const st = k < learn.heard ? ' heard' : k === learn.heard ? ' next' : '';
       return `<button type="button" class="hb say${cls}${st}" data-say="${k}" aria-label="${label} ${text} 듣기">
-        <span class="hb-l">${label} <span class="spk" aria-hidden="true">🔊</span></span><b>${text}</b>${k < learn.heard ? '<span class="hb-ok">✔</span>' : ''}</button>`;
+        <span class="hb-l">${label} <span class="spk" aria-hidden="true">🔊</span></span>${st === ' next' ? '<span class="hb-tap">눌러요</span>' : ''}<b>${text}</b>${k < learn.heard ? '<span class="hb-ok">✔</span>' : ''}</button>`;
     };
     return `
       <div class="char-card">
@@ -1212,12 +1212,11 @@
     const allHeard = step.heard >= total;
     let rec = '';
     if (allHeard) {
+      // 소리 내어 읽도록 이끄는 버튼 (녹음은 하지 않아요): 누르면 2초 동안 막대가 채워져요
       rec = `<div class="read-box">
-        <p class="tip">🎤 <b>뜻</b>과 <b>소리</b>를 소리 내어 읽어 보세요.</p>
-        ${step.recorded ? '' : `<button type="button" class="btn rec-btn" id="rec">🎙️ 녹음하며 읽기</button>`}
+        <button type="button" class="btn rec-btn" id="rec" ${step.recording || step.recorded ? 'disabled' : ''}>${step.recorded ? '잘 읽었어요!' : '뜻과 소리를 소리 내어 읽어 보세요'}</button>
         <div class="rec-bar${step.recording ? ' on' : ''}${step.recorded ? ' full' : ''}" aria-hidden="true"><span></span></div>
-        <div id="recmsg" class="small muted">${step.recording ? '읽는 중이에요…' : step.recorded ? '잘 읽었어요!' : ''}</div>
-        ${step.recorded && step.audioUrl ? '<button type="button" class="btn soft" id="replay">▶ 내 목소리 듣기</button>' : ''}
+        <div id="recmsg" class="small muted">${step.recording ? `"${hunum(c)}" 소리 내어 읽어요…` : ''}</div>
       </div>`;
     }
     return `<div class="card lesson-card">${stageHtml('learn')}${charHeadHtml(c, step)}
@@ -1239,11 +1238,6 @@
       speechSynthesis.speak(u);
     } catch (e) { /* 소리를 낼 수 없는 기기 */ }
   }
-  // 녹음한 목소리는 이 단계에서만 쓰고, 다음 단계로 넘어가면 지워요
-  function dropRecording(step) {
-    if (step.audioUrl) { try { URL.revokeObjectURL(step.audioUrl); } catch (e) { /* 무시 */ } }
-    step.audioUrl = null;
-  }
   function bindLearn(step) {
     const c = C(step.idx);
     const pairs = hunumPairs(c);
@@ -1259,36 +1253,20 @@
       }
     }));
     const recBtn = document.getElementById('rec');
-    if (recBtn) recBtn.addEventListener('click', async () => {
-      if (step.recording) return;
+    if (recBtn) recBtn.addEventListener('click', () => {
+      if (step.recording || step.recorded) return;
       step.recording = true;
       recBtn.disabled = true;
-      const bar = $app.querySelector('.rec-bar');
-      bar.classList.add('on');
-      document.getElementById('recmsg').textContent = '읽는 중이에요…';
-      let stream = null, rec = null;
-      const chunks = [];
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        rec = new MediaRecorder(stream);
-        rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-        rec.start();
-      } catch (e) { stream = null; rec = null; } // 마이크가 없어도 읽는 시간은 똑같이 기다려요
+      $app.querySelector('.rec-bar').classList.add('on');
+      document.getElementById('recmsg').textContent = `"${hunum(c)}" 소리 내어 읽어요…`;
       setTimeout(() => {
-        const finish = () => {
-          if (stream) stream.getTracks().forEach((t) => t.stop());
-          step.recording = false;
-          step.recorded = true;
-          if (chunks.length) step.audioUrl = URL.createObjectURL(new Blob(chunks, { type: chunks[0].type || 'audio/webm' }));
-          if (session && session.steps[session.i] === step) renderStep();
-        };
-        if (rec && rec.state !== 'inactive') { rec.onstop = finish; rec.stop(); } else finish();
+        step.recording = false;
+        step.recorded = true;
+        if (session && session.steps[session.i] === step) renderStep();
       }, RECORD_MS);
     });
-    const replay = document.getElementById('replay');
-    if (replay) replay.addEventListener('click', () => { try { new Audio(step.audioUrl).play(); } catch (e) { /* 무시 */ } });
     const next = document.getElementById('next');
-    if (next) next.addEventListener('click', () => { dropRecording(step); commitLearn(step.idx); nextStep(); });
+    if (next) next.addEventListener('click', () => { commitLearn(step.idx); nextStep(); });
   }
 
   // 2. 활용 어휘 ① — 왼쪽(한자+음훈)과 오른쪽(뜻)을 선으로 연결
