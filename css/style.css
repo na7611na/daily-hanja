@@ -664,13 +664,14 @@ ol.plain li { margin: 4px 0; }
   pointer-events: none; z-index: 2; display: flex; align-items: center; justify-content: center;
 }
 .mark img { display: block; max-width: 100%; max-height: 100%; user-select: none; }
+.mark.no { left: 30%; }
 .mark.no img { width: 82%; }
-/* 색연필로 쓱 긋는 모습: 동그라미는 한 바퀴 돌며, 빗금은 오른쪽 위에서 왼쪽 아래로 나타나요 */
+/* 색연필로 쓱 긋는 모습: 동그라미는 한 바퀴 돌며, 빗금은 왼쪽 아래에서 오른쪽 위로 그어져요 */
 @property --sweep { syntax: '<angle>'; inherits: false; initial-value: 360deg; }
-.mark.ok img { -webkit-mask: conic-gradient(from 20deg, #000 var(--sweep), transparent 0); mask: conic-gradient(from 20deg, #000 var(--sweep), transparent 0); animation: mark-sweep .5s ease-out both; }
+.mark.ok img { -webkit-mask: conic-gradient(from 120deg, #000 var(--sweep), transparent 0); mask: conic-gradient(from 120deg, #000 var(--sweep), transparent 0); animation: mark-sweep .5s ease-out both; }
 @keyframes mark-sweep { from { --sweep: 0deg; } to { --sweep: 360deg; } }
 .mark.no img { animation: mark-slash .28s ease-out both; }
-@keyframes mark-slash { from { clip-path: inset(0 0 100% 100%); } to { clip-path: inset(0 0 0 0); } }
+@keyframes mark-slash { from { clip-path: inset(100% 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @media (prefers-reduced-motion: reduce) { .mark img { animation: none !important; } }
 .explain .answer { font-size: 17px; margin-bottom: 4px; }
 
