@@ -309,6 +309,17 @@
     return String.fromCharCode(0xac00 + code - (code % 28) + jong);
   }
   const jongOf = (syl) => (syl.charCodeAt(0) - 0xac00) % 28;
+  // 조사: 앞말의 마지막 글자에 받침이 있는지 보고 고릅니다. ('빛 색'이, '가르칠 교'가)
+  const JOSA = { 이: ['이', '가'], 을: ['을', '를'], 은: ['은', '는'], 이에요: ['이에요', '예요'], 이라고: ['이라고', '라고'], 이라는: ['이라는', '라는'], 으로: ['으로', '로'] };
+  function josa(word, kind) {
+    const [a, b] = JOSA[kind];
+    const ch = String(word).replace(/<[^>]*>/g, '').replace(/[^가-힣0-9]/g, '').slice(-1);
+    if (/[0-9]/.test(ch)) return '136780'.includes(ch) ? a : b; // 일·삼·육·칠·팔·영 → 받침
+    if (!ch) return b;
+    const jong = jongOf(ch);
+    if (kind === '으로') return jong && jong !== 8 ? a : b; // ㄹ 받침은 '로'
+    return jong ? a : b;
+  }
   const norm = (s) => (s || '').replace(/[\s.,!?·'"()~\-]/g, '');
 
   function soundOk(c, ans) {
@@ -934,7 +945,7 @@
     return `${weekendNote}<div class="card hero today-card">
       ${head}
       <div class="big-hanja mystery">${started || isRedo(c.idx) ? c.h : '?'}</div>
-      <p class="muted">${isRedo(c.idx) ? `🔁 지난번에 틀린 문제가 있던 '${hunum(c)}'를 다시 배워요.` : started ? '하던 학습을 이어서 해요.' : '오늘은 어떤 한자를 만날까요?'}</p>
+      <p class="muted">${isRedo(c.idx) ? `🔁 지난번에 틀린 문제가 있던 '${hunum(c)}'${josa(hunum(c), '을')} 다시 배워요.` : started ? '하던 학습을 이어서 해요.' : '오늘은 어떤 한자를 만날까요?'}</p>
       <ol class="steps">${rows.map(([e, n, txt, cls]) => `<li class="${cls ? `st-${cls}` : ''}"><span class="num">${n || e}</span><span>${txt}</span></li>`).join('')}</ol>
       <div class="stamp-row">
         <div class="done-stamp empty" role="img" aria-label="학습을 마치면 여기에 도장을 찍어요">${EMPTY_STAMP_SVG}</div>
@@ -1434,8 +1445,8 @@
         b.classList.add('shake', 'bad');
         setTimeout(() => b.classList.remove('shake', 'bad'), 600);
         document.getElementById('fb').innerHTML = step.filled.includes(k)
-          ? `<div class="feedback no">🤔 '<b>${w.read}</b>'은(는) 이미 다른 빈칸에 넣었어요. 문장을 다시 읽어 봐요.</div>`
-          : `<div class="feedback no">🤔 '<b>${w.read}</b>'은(는) '${w.mean}'이라는 뜻이에요. 이 문장에 어울리는지 다시 생각해 봐요.</div>`;
+          ? `<div class="feedback no">🤔 '<b>${w.read}</b>'${josa(w.read, '은')} 이미 다른 빈칸에 넣었어요. 문장을 다시 읽어 봐요.</div>`
+          : `<div class="feedback no">🤔 '<b>${w.read}</b>'${josa(w.read, '은')} '${w.mean}'${josa(w.mean, '이라는')} 뜻이에요. 이 문장에 어울리는지 다시 생각해 봐요.</div>`;
       }
     }));
   }
@@ -1470,13 +1481,13 @@
     const w = step.word;
     const { syl } = targetPos(c, w);
     const own = charHunum(c.h, syl);
-    if (step.ok) return `<div class="explain"><div class="solve">'${w.read}'의 '${syl}'은(는) <b>${own.m} ${own.s}</b>(<span class="hj">${c.h}</span>)예요.</div></div>`;
+    if (step.ok) return `<div class="explain"><div class="solve">'${w.read}'의 '${syl}'${josa(syl, '은')} <b>${own.m} ${own.s}</b>(<span class="hj">${c.h}</span>)${josa(own.s, '이에요')}.</div></div>`;
     const why = [];
-    if (!step.okM) why.push(`뜻을 '<b>${esc(step.m)}</b>'(이)라고 썼어요. 이 글자의 뜻(훈)은 '<b>${c.meanings.join(', ')}</b>'이에요.`);
-    if (!step.okS) why.push(`음을 '<b>${esc(step.s)}</b>'(이)라고 썼어요. 이 글자의 소리(음)는 '<b>${c.sounds.join(', ')}</b>'이에요.`);
-    if (!c.sounds.includes(syl)) why.push(`'${w.read}'에서는 '${syl}'(으)로 읽지만 본래 소리는 '${c.sounds[0]}'이에요. (두음 법칙)`);
+    if (!step.okM) why.push(`뜻을 '<b>${esc(step.m)}</b>'${josa(step.m, '이라고')} 썼어요. 이 글자의 뜻(훈)은 '<b>${c.meanings.join(', ')}</b>'${josa(c.meanings.join(', '), '이에요')}.`);
+    if (!step.okS) why.push(`음을 '<b>${esc(step.s)}</b>'${josa(step.s, '이라고')} 썼어요. 이 글자의 소리(음)는 '<b>${c.sounds.join(', ')}</b>'${josa(c.sounds.join(', '), '이에요')}.`);
+    if (!c.sounds.includes(syl)) why.push(`'${w.read}'에서는 '${syl}'${josa(syl, '으로')} 읽지만 본래 소리는 '${c.sounds[0]}'${josa(c.sounds[0], '이에요')}. (두음 법칙)`);
     return `<div class="explain"><div class="answer">정답 <b>${own.m} ${own.s}</b>(<span class="hj">${c.h}</span>)</div><div class="why"><b>틀린 까닭</b> ${why.join(' ')}</div>
-      <div class="solve"><b>해설</b> ${breakdown(w)}<br>'${w.read}'의 '${targetPos(c, w).syl}'은(는) <span class="hj">${c.h}</span>(${own.m} ${own.s})예요.</div></div>`;
+      <div class="solve"><b>해설</b> ${breakdown(w)}<br>'${w.read}'의 '${targetPos(c, w).syl}'${josa(targetPos(c, w).syl, '은')} <span class="hj">${c.h}</span>(${own.m} ${own.s})${josa(own.s, '이에요')}.</div></div>`;
   }
   function bindCheck(step) {
     if (step.graded) { bindNext(); return; }
@@ -1565,7 +1576,7 @@
     return `<div class="card lesson-card">${stageHtml('infer')}
       <div class="quiz-q${answered ? ' graded' : ''}">${answered ? stampHtml(step.chosen === step.answer) : ''}
         <div class="today-chip"><span class="hanja">${c.h}</span> ${hunum(c)}</div>
-        <div class="prompt">오늘의 한자 '<b>${hunum(c)}</b>'가 <b class="pos">쓰인</b> 어휘는 무엇일까요?</div>
+        <div class="prompt">오늘의 한자 '<b>${hunum(c)}</b>'${josa(hunum(c), '이')} <b class="pos">쓰인</b> 어휘는 무엇일까요?</div>
         <div class="qhint">단어의 뜻을 생각해 보며 짐작해 보세요!</div>
       </div>
       <div class="options two">${opts}</div>
