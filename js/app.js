@@ -1222,11 +1222,11 @@
     const total = hunumPairs(c).length * 2;
     const allHeard = step.heard >= total;
     let rec = '';
-    if (allHeard) {
-      // 소리 내어 읽도록 이끄는 버튼 (녹음은 하지 않아요): 누르면 2초 동안 막대가 채워져요
+    if (allHeard && !step.recorded) {
+      // 소리 내어 읽도록 이끄는 버튼 (녹음은 하지 않아요): 누르면 2초 동안 막대가 채워지고, 다 채워지면 사라져요
       rec = `<div class="read-box">
-        <button type="button" class="btn rec-btn" id="rec" ${step.recording || step.recorded ? 'disabled' : ''}>뜻과 소리를 소리 내어 읽어 보세요</button>
-        <div class="rec-bar${step.recording ? ' on' : ''}${step.recorded ? ' full' : ''}" aria-hidden="true"><span></span></div>
+        <button type="button" class="btn rec-btn" id="rec" ${step.recording ? 'disabled' : ''}>뜻과 소리를 소리 내어 읽어 보세요</button>
+        <div class="rec-bar${step.recording ? ' on' : ''}" aria-hidden="true"><span></span></div>
         <div id="recmsg" class="small muted">${step.recording ? `"${hunum(c)}" 소리 내어 읽어요…` : ''}</div>
       </div>`;
     }
