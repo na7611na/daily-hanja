@@ -555,6 +555,23 @@
     ];
   }
   // '한 자 더 배우기': 복습 없이 새 한자 1~6단계만
+  // 하던 학습 이어서 하기: 새로고침하거나 잠깐 나갔다 와도 하던 단계부터 (이 기기에만 저장해요)
+  const KEEP_TYPES = ['lesson', 'extra', 'relearn', 'weekly', 'oldreview'];
+  const sessKey = () => `everyday-hanja:sess:${user}`;
+  function keepSession() {
+    if (!user || !session || !KEEP_TYPES.includes(session.type)) return;
+    try { localStorage.setItem(sessKey(), JSON.stringify(Object.assign({}, session, { savedOn: fmt(today()) }))); } catch (e) { /* 무시 */ }
+  }
+  function dropSession() { try { localStorage.removeItem(sessKey()); } catch (e) { /* 무시 */ } }
+  function storedSession(type) {
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(sessKey())); } catch (e) { s = null; }
+    if (!s || s.type !== type || s.savedOn !== fmt(today()) || !Array.isArray(s.steps) || !s.steps[s.i] || s.steps[s.i].kind === 'done') return null;
+    // 읽어 주던 중이거나 막대가 채워지던 중이었으면 그 단계를 다시 할 수 있게 풀어 줘요
+    s.steps.forEach((st) => { if (st.reading !== undefined) st.reading = null; if (st.recording) st.recording = false; });
+    return s;
+  }
+
   function buildExtra() {
     const i = nextNewIdx();
     const plan = { newIdx: i, reviews: [], week: [] };
@@ -636,6 +653,7 @@
   }
 
   function finishSession() {
+    dropSession();
     const quiz = { correct: session.correct, total: session.total };
     if (['lesson', 'extra'].includes(session.type) && session.plan.newIdx !== null && session.plan.newIdx !== undefined) {
       const i = session.plan.newIdx;
@@ -1104,19 +1122,26 @@
     if (kind === 'lesson') {
       const e = S.log[fmt(t)];
       if ((e && e.done) || (S.phase !== 'study' && !(e && e.newIdx !== null && e.newIdx !== undefined))) { location.hash = '#/'; return; }
-      if (!session || session.type !== 'lesson' || session.date !== fmt(t)) session = buildLesson();
+      if (!session || session.type !== 'lesson' || session.date !== fmt(t)) {
+        const kept = storedSession('lesson');
+        session = kept && kept.plan.newIdx === planToday().newIdx ? kept : buildLesson();
+      }
     } else if (kind === 'extra') {
       const e = S.log[fmt(t)];
       if (!session || session.type !== 'extra') {
-        if (!(e && e.done) || nextNewIdx() === null) { location.hash = '#/'; return; }
-        session = buildExtra();
+        session = storedSession('extra');
+        if (!session) {
+          if (!(e && e.done) || nextNewIdx() === null) { location.hash = '#/'; return; }
+          session = buildExtra();
+        }
       }
     } else if (kind === 'relearn') {
       if (!session || session.type !== 'relearn') {
         if (S.phase !== 'relearn' || !S.relearn.length) { location.hash = '#/'; return; }
-        session = buildRelearn();
+        session = storedSession('relearn') || buildRelearn();
       }
     } else if (kind === 'oldreview') {
+      if (!session || session.type !== 'oldreview') session = storedSession('oldreview');
       if (!session || session.type !== 'oldreview') {
         if (!oldReviewDue()) { location.hash = '#/'; return; }
         session = buildOldReview();
@@ -1125,7 +1150,7 @@
       }
     } else if (kind === 'weekly') {
       if (learnedInWeek(t).length === 0) { location.hash = '#/'; return; }
-      if (!session || session.type !== 'weekly') session = buildWeekly();
+      if (!session || session.type !== 'weekly') session = storedSession('weekly') || buildWeekly();
     } else {
       if (!S.order.length) { location.hash = '#/'; return; }
       if (!session || session.type !== 'review') session = buildFreeReview();
@@ -1226,6 +1251,7 @@
   }
 
   function renderStep() {
+    keepSession();
     const step = session.steps[session.i];
     const pct = (session.i / (session.steps.length - 1)) * 100;
     const head = step.kind === 'done' ? '' : `
@@ -2413,6 +2439,7 @@
       if (confirm(`정말 ${user}의 모든 학습 기록을 지울까요? 되돌릴 수 없어요.`)) {
         S = blankState();
         save();
+        dropSession();
         session = null;
         listGrade = null;
         location.hash = '#/';
