@@ -689,17 +689,25 @@
     : '<svg viewBox="0 0 100 100"><path d="M14 52 L38 80 L88 14" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>'}</span>`;
   // 한자어에서 소리가 바뀌어 굳어진 말 등의 설명
   const noteHtml = (w) => (w.note ? `<div class="word-note">💡 ${w.note}</div>` : '');
-  function charHeadHtml(c) {
-    const pairs = c.meanings.length === c.sounds.length
-      ? c.meanings.map((m, k) => [m, c.sounds[k]]) : [[c.meanings.join(', '), c.sounds.join(', ')]];
+  const hunumPairs = (c) => (c.meanings.length === c.sounds.length
+    ? c.meanings.map((m, k) => [m, c.sounds[k]]) : [[c.meanings.join(', '), c.sounds.join(', ')]]);
+  // learn: 1단계 '오늘의 한자'에서는 뜻·소리 칸이 누르면 읽어 주는 버튼이 되고, 아래 반복 줄은 없어요
+  function charHeadHtml(c, learn = null) {
+    const pairs = hunumPairs(c);
+    let n = 0;
+    const box = (cls, label, text) => {
+      const k = n++;
+      if (!learn) return `<div class="hb${cls}"><span class="hb-l">${label}</span><b>${text}</b></div>`;
+      const st = k < learn.heard ? ' heard' : k === learn.heard ? ' next' : '';
+      return `<button type="button" class="hb say${cls}${st}" data-say="${k}" aria-label="${label} ${text} 듣기">
+        <span class="hb-l">${label} <span class="spk" aria-hidden="true">🔊</span></span><b>${text}</b>${k < learn.heard ? '<span class="hb-ok">✔</span>' : ''}</button>`;
+    };
     return `
       <div class="char-card">
         <span class="pill">${c.gradeName}</span>
         <div class="big-hanja">${c.h}</div>
-        <div class="hunum-boxes">${pairs.map(([m, s]) => `
-          <div class="hb"><span class="hb-l">뜻(훈)</span><b>${m}</b></div>
-          <div class="hb snd"><span class="hb-l">소리(음)</span><b>${s}</b></div>`).join('')}</div>
-        <div class="hunum-read">"${hunum(c)}"</div>
+        <div class="hunum-boxes">${pairs.map(([m, s]) => box('', '뜻(훈)', m) + box(' snd', '소리(음)', s)).join('')}</div>
+        ${learn ? '' : `<div class="hunum-read">"${hunum(c)}"</div>`}
       </div>`;
   }
   function bindOpen(root = $app) {
@@ -999,8 +1007,8 @@
         ? (dayChars.length ? `<button class="cell-in stamp-btn" data-day="${d}" aria-label="${DAY[(k + 1) % 7]}요일 출석 · 배운 한자 ${dayChars.length}자 보기">${STAMP_SVG}</button>` : `<span class="stamp-btn" aria-label="출석">${STAMP_SVG}</span>`)
         : '';
       // 금요일: 일주일 복습 하는 날 (마치면 ✔)
-      const wk = k === 4 ? (S.weekly[fmt(mon)] ? '<div class="wk-tag done">복습 ✔</div>' : '<div class="wk-tag">복습 날</div>') : '';
-      return `<div class="d ${cls}"><div class="lbl">${DAY[(k + 1) % 7]}</div><div class="cell">${stamp}</div>${wk}</div>`;
+      const wk = k === 4 ? (S.weekly[fmt(mon)] ? '<div class="wk-tag done">복습 완료</div>' : '<div class="wk-tag">복습날</div>') : '';
+      return `<div class="d ${cls}">${wk}<div class="lbl">${DAY[(k + 1) % 7]}</div><div class="cell">${stamp}</div></div>`;
     }).join('');
     main += `
       <div class="card">
@@ -1175,7 +1183,7 @@
     const quit = document.getElementById('quit');
     if (quit) quit.addEventListener('click', () => { location.hash = '#/'; });
     const B = {
-      learn: () => document.getElementById('next').addEventListener('click', () => { commitLearn(step.idx); nextStep(); }),
+      learn: bindLearn,
       match: bindMatch, cloze: bindCloze, check: bindCheck, write: bindWrite, infer: bindInfer, pick: bindPick,
       weekIntro: () => document.getElementById('next').addEventListener('click', nextStep),
       weekSummary: () => document.getElementById('next').addEventListener('click', nextStep),
@@ -1195,12 +1203,92 @@
   }
 
   // 1. 오늘의 한자
+  // 1. 오늘의 한자: 뜻·소리 버튼을 차례로 눌러 듣고 → 소리 내어 읽기(녹음) → 다음 단계
+  const RECORD_MS = 2000;
   function renderLearn(step) {
     const c = C(step.idx);
-    return `<div class="card lesson-card">${stageHtml('learn')}${charHeadHtml(c)}
+    step.heard = step.heard || 0;
+    const total = hunumPairs(c).length * 2;
+    const allHeard = step.heard >= total;
+    let rec = '';
+    if (allHeard) {
+      rec = `<div class="read-box">
+        <p class="tip">🎤 <b>뜻</b>과 <b>소리</b>를 소리 내어 읽어 보세요.</p>
+        ${step.recorded ? '' : `<button type="button" class="btn rec-btn" id="rec">🎙️ 녹음하며 읽기</button>`}
+        <div class="rec-bar${step.recording ? ' on' : ''}${step.recorded ? ' full' : ''}" aria-hidden="true"><span></span></div>
+        <div id="recmsg" class="small muted">${step.recording ? '읽는 중이에요…' : step.recorded ? '잘 읽었어요!' : ''}</div>
+        ${step.recorded && step.audioUrl ? '<button type="button" class="btn soft" id="replay">▶ 내 목소리 듣기</button>' : ''}
+      </div>`;
+    }
+    return `<div class="card lesson-card">${stageHtml('learn')}${charHeadHtml(c, step)}
       ${isRedo(c.idx) ? '<p class="center redo-note">🔁 다시 배우는 한자예요. 이번에는 끝까지 모두 맞혀 봐요!</p>' : ''}
-      <p class="center tip">💡 <b>뜻</b>과 <b>소리</b>를 소리 내어 읽어 보세요.</p>
-      ${nextBtn('활용 어휘 만나러 가기 →')}</div>`;
+      ${allHeard ? '' : `<p class="center tip">👆 <b>뜻</b>과 <b>소리</b> 칸을 <b>차례대로</b> 눌러 들어 보세요.</p>`}
+      <div id="fb"></div>
+      ${rec}
+      ${step.recorded ? nextBtn('활용 어휘 만나러 가기 →') : ''}</div>`;
+  }
+  function speak(text) {
+    try {
+      if (!window.speechSynthesis) return;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      u.rate = 0.85;
+      const v = speechSynthesis.getVoices().find((x) => /^ko/i.test(x.lang));
+      if (v) u.voice = v;
+      speechSynthesis.speak(u);
+    } catch (e) { /* 소리를 낼 수 없는 기기 */ }
+  }
+  // 녹음한 목소리는 이 단계에서만 쓰고, 다음 단계로 넘어가면 지워요
+  function dropRecording(step) {
+    if (step.audioUrl) { try { URL.revokeObjectURL(step.audioUrl); } catch (e) { /* 무시 */ } }
+    step.audioUrl = null;
+  }
+  function bindLearn(step) {
+    const c = C(step.idx);
+    const pairs = hunumPairs(c);
+    const texts = pairs.flatMap(([m, s]) => [m, s]);
+    $app.querySelectorAll('[data-say]').forEach((b) => b.addEventListener('click', () => {
+      const k = +b.dataset.say;
+      speak(texts[k]);
+      if (k === step.heard) { step.heard++; renderStep(); }
+      else if (k > step.heard) {
+        b.classList.add('shake');
+        setTimeout(() => b.classList.remove('shake'), 500);
+        document.getElementById('fb').innerHTML = `<div class="feedback no">${step.heard % 2 === 0 ? '<b>뜻</b>' : '<b>소리</b>'} 칸부터 눌러요.</div>`;
+      }
+    }));
+    const recBtn = document.getElementById('rec');
+    if (recBtn) recBtn.addEventListener('click', async () => {
+      if (step.recording) return;
+      step.recording = true;
+      recBtn.disabled = true;
+      const bar = $app.querySelector('.rec-bar');
+      bar.classList.add('on');
+      document.getElementById('recmsg').textContent = '읽는 중이에요…';
+      let stream = null, rec = null;
+      const chunks = [];
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        rec = new MediaRecorder(stream);
+        rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.start();
+      } catch (e) { stream = null; rec = null; } // 마이크가 없어도 읽는 시간은 똑같이 기다려요
+      setTimeout(() => {
+        const finish = () => {
+          if (stream) stream.getTracks().forEach((t) => t.stop());
+          step.recording = false;
+          step.recorded = true;
+          if (chunks.length) step.audioUrl = URL.createObjectURL(new Blob(chunks, { type: chunks[0].type || 'audio/webm' }));
+          if (session && session.steps[session.i] === step) renderStep();
+        };
+        if (rec && rec.state !== 'inactive') { rec.onstop = finish; rec.stop(); } else finish();
+      }, RECORD_MS);
+    });
+    const replay = document.getElementById('replay');
+    if (replay) replay.addEventListener('click', () => { try { new Audio(step.audioUrl).play(); } catch (e) { /* 무시 */ } });
+    const next = document.getElementById('next');
+    if (next) next.addEventListener('click', () => { dropRecording(step); commitLearn(step.idx); nextStep(); });
   }
 
   // 2. 활용 어휘 ① — 왼쪽(한자+음훈)과 오른쪽(뜻)을 선으로 연결

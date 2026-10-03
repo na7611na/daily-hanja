@@ -703,3 +703,25 @@ ol.plain li { margin: 4px 0; }
 .wk-tag { margin: 4px -6px 0; font-size: 10.5px; text-align: center; line-height: 1.5; padding: 0 6px; border-radius: 999px;
   background: var(--sw-soft, var(--gold-soft)); color: var(--ink-soft); white-space: nowrap; }
 .wk-tag.done { background: var(--green-soft); color: var(--green); font-weight: 700; }
+
+/* 1단계: 누르면 읽어 주는 뜻·소리 칸 */
+.hb.say { font: inherit; color: inherit; cursor: pointer; position: relative; transition: transform .1s, box-shadow .2s; }
+.hb.say:active { transform: scale(.97); }
+.hb.say.next { box-shadow: 0 0 0 4px var(--accent); animation: pulse-say 1.4s ease-in-out infinite; }
+.hb.say.heard { opacity: .95; }
+.hb .spk { font-size: 13px; }
+.hb-ok { position: absolute; top: 6px; right: 8px; font-size: 14px; color: var(--green); font-weight: 700; }
+@keyframes pulse-say { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 35%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .hb.say.next { animation: none; } }
+/* 소리 내어 읽기(녹음) */
+.read-box { margin-top: 14px; padding: 14px; border-radius: 18px; background: var(--bg); text-align: center; display: grid; gap: 10px; justify-items: center; }
+.read-box .tip { margin: 0; }
+.rec-btn { min-width: 200px; }
+.rec-bar { width: 100%; max-width: 320px; height: 12px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.rec-bar span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); }
+.rec-bar.on span { animation: rec-fill 2s linear forwards; }
+.rec-bar.full span { width: 100%; background: var(--green); }
+@keyframes rec-fill { to { width: 100%; } }
+/* 이번 주 학습 현황: 금요일 위 표시 (제목 줄과 겹쳐도 괜찮아요) */
+.week .d { position: relative; }
+.week .d .wk-tag { position: absolute; left: 50%; top: -20px; transform: translateX(-50%); margin: 0; }
