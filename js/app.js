@@ -2403,10 +2403,6 @@
     $app.innerHTML = `
       <div class="card">
         <h2>설정</h2>
-        <div class="setting">
-          <div class="txt"><b>학생</b><div class="small muted">${esc(user)}</div></div>
-          <button class="btn ghost" id="switch">로그아웃</button>
-        </div>
         <form class="setting pw-form" id="pwf" autocomplete="off">
           <div class="txt"><b>비밀번호 바꾸기</b>
             <input id="pw0" type="password" class="text-input" placeholder="지금 비밀번호">
@@ -2415,10 +2411,6 @@
           <button class="btn ghost">바꾸기</button>
         </form>
         <div class="setting">
-          <div class="txt"><b>선생님 메뉴</b><div class="small muted">학생 기록 보기, 비밀번호 초기화</div></div>
-          <a class="btn ghost" href="#/teacher">열기</a>
-        </div>
-        <div class="setting">
           <div class="txt"><b>학습 기록 초기화</b><div class="small muted">${esc(user)}의 배운 한자, 글짓기, 시험 기록이 모두 지워져요.</div></div>
           <button class="btn ghost" id="reset">초기화</button>
         </div>
@@ -2426,6 +2418,24 @@
 
       <div class="card">
         <h2>이렇게 공부해요</h2>
+        <h3 class="meta-title">🧠 메타인지 학습법</h3>
+        <p class="small"><b>메타인지</b>는 <b>'내가 무엇을 알고, 무엇을 모르는지 스스로 아는 힘'</b>이에요.
+          공부를 잘하는 사람은 머리가 좋아서가 아니라, 모르는 것을 정확히 찾아내서 그것을 공부해요.</p>
+        <div class="meta-cycle" aria-label="떠올리기, 확인하기, 고치기를 되풀이해요">
+          <div><span>🤔</span><b>떠올리기</b><small>답을 보기 전에 먼저 생각해요</small></div>
+          <i>→</i>
+          <div><span>✅</span><b>확인하기</b><small>맞았는지 스스로 살펴요</small></div>
+          <i>→</i>
+          <div><span>🔁</span><b>고치기</b><small>틀린 까닭을 알고 다시 익혀요</small></div>
+        </div>
+        <ul class="plain small meta-tips">
+          <li><b>모르면 솔직하게 '몰라요'</b> — 레벨테스트에서 찍지 않아야 내가 모르는 한자만 골라 공부할 수 있어요.</li>
+          <li><b>먼저 떠올리고 확인해요</b> — 급수 한자에서 '뜻·음 가리고 스스로 떠올리기'를 켜고, 떠올린 뒤에 눌러 확인해요.</li>
+          <li><b>틀린 까닭을 읽어요</b> — 확인하기·추론하기 해설에서 왜 틀렸는지 알면 같은 실수를 하지 않아요.</li>
+          <li><b>소리 내어 말해 봐요</b> — 뜻과 소리를 소리 내어 읽고, 배운 낱말로 글을 지어 보면 진짜 아는지 알 수 있어요.</li>
+          <li><b>천천히 생각해요</b> — 빨리 누르는 것보다 한 번 더 생각하는 것이 더 많이 배우는 길이에요.</li>
+        </ul>
+        <h3 class="meta-title">📉 잊기 전에 다시 떠올리기</h3>
         <p class="small">독일의 심리학자 <b>에빙하우스</b>는 사람이 새로 배운 것을 하루만 지나도 절반 넘게 잊어버린다는
           <b>망각 곡선</b>을 발견했어요. 하지만 잊어버리기 전에 다시 떠올리면 기억이 점점 오래 남아요.</p>
         ${curveSvg()}
@@ -2450,7 +2460,6 @@
           모두 <b>${HANJA.length}자</b>가 들어 있어요. 평일마다 한 자씩, 약 ${Math.round(HANJA.length / 5)}주 분량이에요.</p>
         <p class="small muted">준비 중: ${UPCOMING_GRADES.join(', ')}</p>
       </div>`;
-    document.getElementById('switch').addEventListener('click', () => { logout(); location.hash = '#/'; route(); });
     document.getElementById('pwf').addEventListener('submit', (e) => {
       e.preventDefault();
       const fb = (t, ok) => { document.getElementById('pwfb').innerHTML = `<div class="feedback ${ok ? 'ok' : 'no'}">${t}</div>`; };
