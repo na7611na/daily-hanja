@@ -2791,10 +2791,10 @@
         <h3 style="margin-top:0">👥 학생 계정 관리</h3>
         <p class="small muted" style="margin-top:0">🔑 초기화는 비밀번호를 새로 정하고, 🗑 삭제는 학생과 학습 기록을 지워요. 한 명씩 하거나, 여러 명을 골라 한꺼번에 할 수 있어요.</p>
         ${list.length ? `<div class="acct-bar">
-            <label class="row small"><input type="checkbox" id="acct-all"> 모두 선택 <span class="muted" id="acct-n"></span></label>
+            <label class="row small"><input type="checkbox" id="acct-all"> 모두 선택</label><span class="muted small" id="acct-n"></span>
             <span class="spacer"></span>
-            <button class="btn soft small-btn" id="acct-reset" disabled>🔑 고른 학생 초기화</button>
-            <button class="btn ghost small-btn" id="acct-del" disabled>🗑 고른 학생 삭제</button>
+            <button class="btn soft small-btn" id="acct-reset" disabled>비번 초기화</button>
+            <button class="btn ghost small-btn" id="acct-del" disabled>계정 삭제</button>
           </div>
           <ul class="acct-list">${list.map((n) => `<li>
             <label class="row"><input type="checkbox" class="acct-ck" value="${esc(n)}"><span class="nm">${esc(shortName(n))}</span>${shortName(n) !== n ? `<small class="muted">${esc(n)}</small>` : ''}</label>
