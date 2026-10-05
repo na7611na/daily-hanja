@@ -98,7 +98,7 @@ mark { background: var(--mark); color: inherit; border-radius: 6px; padding: 0 3
 .logout[hidden] { display: none; }
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(4, 1fr);
   background: var(--paper); border-top: 2px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -210,7 +210,7 @@ body.in-lesson { padding-bottom: 24px; }
 .week .d.today .cell { border-color: var(--accent); border-style: solid; }
 .cell-in { background: none; border: 0; cursor: pointer; font-size: 28px; color: inherit; padding: 0; }
 .cell-in.miss { color: var(--red); }
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; text-align: center; }
 .stats > div { background: var(--bg); border-radius: 16px; padding: 10px 4px; }
 .stats b { display: block; font-family: var(--fun); font-weight: 400; font-size: 30px; color: var(--accent-dark); line-height: 1.2; }
 .stats span { font-size: 13px; color: var(--ink-soft); }
@@ -779,3 +779,36 @@ ol.plain li { margin: 4px 0; }
 .modal-back.center .modal { border-radius: 24px; }
 .pf-text, .proof { overflow-wrap: anywhere; min-width: 0; }
 @keyframes mark-in { from { transform: scale(1.8); opacity: 0; } }
+
+/* 랭킹 */
+.stats b small.unit { font-size: .5em; margin: 0 0 0 2px; vertical-align: .1em; }
+.rank-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rank-list li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 14px; background: var(--bg); }
+.rank-list li.top1 { background: color-mix(in srgb, #f5b72f 28%, var(--paper)); }
+.rank-list li.top2 { background: color-mix(in srgb, #b8c2cc 30%, var(--paper)); }
+.rank-list li.top3 { background: color-mix(in srgb, #d08a4e 24%, var(--paper)); }
+.rank-list .rk { min-width: 40px; text-align: center; font-family: var(--fun); font-size: 18px; }
+.rank-list li[class^="top"] .rk { font-size: 24px; }
+.rank-list .nm { flex: 1; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.rank-list .sc { color: var(--ink-soft); white-space: nowrap; }
+.rank-list .sc b { color: var(--accent-dark); font-size: 18px; }
+
+/* 결과 화면: 목표 5분까지 (1칸 = 1분) */
+.goal5 { margin-top: 10px; text-align: center; }
+.g5-bar { display: flex; align-items: center; gap: 5px; justify-content: center; }
+.g5-bar i { flex: 1; max-width: 46px; height: 22px; border-radius: 7px; background: linear-gradient(90deg, var(--accent) var(--f), var(--line) var(--f)); }
+.g5-flag { font-size: 24px; margin-left: 4px; }
+.g5-msg { margin-top: 8px; font-family: var(--fun); font-size: 28px; color: var(--accent-dark); animation: g5-pop .6s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes g5-pop { from { transform: scale(.5); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .g5-msg { animation: none; } }
+
+/* 선생님 캐릭터 한마디 (문제 위) */
+.teacher-pop { position: fixed; z-index: 60; display: flex; align-items: center; gap: 10px; justify-content: center;
+  pointer-events: none; opacity: 0; transform: translateY(-12px) scale(.9); transition: opacity .25s, transform .3s cubic-bezier(.2, 1.6, .4, 1); }
+.teacher-pop.show { opacity: 1; transform: none; }
+.tp-face { width: 76px; height: 76px; flex: none; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .18)); }
+.tp-face svg { width: 100%; height: 100%; display: block; }
+.tp-bubble { position: relative; background: var(--paper); border: 3px solid var(--accent); border-radius: 20px; padding: 12px 16px;
+  font-family: var(--fun); font-size: 19px; line-height: 1.35; color: var(--ink); box-shadow: 0 6px 18px rgba(0, 0, 0, .16); }
+.tp-bubble::before { content: ''; position: absolute; left: -13px; top: 50%; margin-top: -9px; border: 9px solid transparent; border-right: 12px solid var(--accent); border-left: 0; }
+@media (prefers-reduced-motion: reduce) { .teacher-pop { transition: opacity .2s; transform: none; } }

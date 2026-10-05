@@ -170,6 +170,19 @@
     S = blankState();
     session = null;
   }
+  // 랭킹: '이미 아는 한자'가 많은 순서 (같으면 공부한 한자가 많은 순서). 시험용 이름과 선생님은 빼요.
+  const RANK_SKIP = (n) => /테스트|시험용학생/.test(n) || n === '강형권';
+  function ranking() {
+    const list = users().filter((n) => !RANK_SKIP(n)).map((n) => {
+      const st = n === user ? S : loadState(n);
+      return { n, known: Object.keys(st.known || {}).length, learned: (st.order || []).length };
+    }).sort((a, b) => b.known - a.known || b.learned - a.learned || a.n.localeCompare(b.n, 'ko'));
+    list.forEach((x, k) => {
+      const prev = list[k - 1];
+      x.rank = prev && prev.known === x.known && prev.learned === x.learned ? prev.rank : k + 1;
+    });
+    return list;
+  }
   function logActivity(a) {
     S.activity.push(Object.assign({ date: fmt(today()) }, a));
   }
@@ -533,15 +546,13 @@
     const reviews = yesterdayReviews();
     const old = oldReviewList(OLD_REVIEW_N + reviews.length).filter((i) => !reviews.includes(i)).slice(0, OLD_REVIEW_N);
     const steps = old.map((i) => ({ kind: 'check', idx: i, stage: 'old', old: true, word: pick(C(i).words), m: '', s: '', graded: false }));
-    reviews.forEach((i, k) => {
-      const stage = k === 0 ? 'review' : 'missed';
-      steps.push(soundQuestion(i, stage));
-      if (k === 0) steps.push(meaningQuestion(i, stage));
-    });
+    reviews.forEach((i, k) => steps.push(reviewCheck(i, k === 0 ? 'review' : 'missed')));
     if (reviews.length) S.yReviewDate = ds; // 오늘 학습에서는 어제 복습을 다시 하지 않아요
     steps.push({ kind: 'done' });
     return { type: 'oldreview', steps, i: 0, correct: 0, total: 0, started: Date.now() };
   }
+  // 어제 배운 한자·틀렸던 한자 복습: 4단계 확인하기처럼 어휘 속 글자의 뜻과 음 쓰기
+  const reviewCheck = (i, stage) => ({ kind: 'check', idx: i, stage, word: pick(C(i).words), m: '', s: '', graded: false });
   function newCharSteps(i) {
     const c = C(i);
     const order = shuffle(c.words.map((_, k) => k));
@@ -594,11 +605,7 @@
     const plan = planToday();
     const steps = [];
     // 입장할 때 어제 배운 한자 복습을 이미 했으면 바로 오늘의 한자부터
-    if (S.yReviewDate !== fmt(today())) plan.reviews.forEach((i, k) => {
-      const stage = k === 0 ? 'review' : 'missed';
-      steps.push(soundQuestion(i, stage));
-      if (k === 0) steps.push(meaningQuestion(i, stage));
-    });
+    if (S.yReviewDate !== fmt(today())) plan.reviews.forEach((i, k) => steps.push(reviewCheck(i, k === 0 ? 'review' : 'missed')));
     if (plan.newIdx !== null && plan.newIdx !== undefined) steps.push(...newCharSteps(plan.newIdx));
     if (plan.week.length) {
       steps.push({ kind: 'weekIntro', list: plan.week, stage: 'week' });
@@ -1095,8 +1102,9 @@
       <div class="card">
         <div class="stats">
           <div><b><small>🔥</small>${streak()}</b><span>연속 학습일</span></div>
-          <div><b><small>💡</small>${Object.keys(S.known).length}</b><span>이미 아는 한자</span></div>
           <div><b><small>📚</small>${S.order.length}</b><span>공부한 한자</span></div>
+          <div><b><small>💡</small>${Object.keys(S.known).length}</b><span>이미 아는 한자</span></div>
+          ${(() => { const r = ranking(); const me = r.find((x) => x.n === user); return `<div class="rank-cell"><b><small>🏅</small>${me ? `${me.rank}<small class="unit">위</small>` : '-'}</b><span>${me ? `${r.length}명 중 ` : ''}랭킹</span></div>`; })()}
         </div>
         <div class="row" style="margin-top:16px"><b>${g.name}</b><span class="spacer"></span>
           <span class="small muted">아는 ${knownN} + 공부 ${learnedN} / ${total}자</span></div>
@@ -1213,21 +1221,20 @@
   const studyClock = () => `<span class="timer" title="오늘 공부한 시간">⏱ <span class="study-clock">${clock(todaySecs())}</span></span>`;
   // 끝 화면에 보여 주는 오늘 학습 시간과 격려
   // 5분이 안 됐을 때 (오늘 한자 학습 끝 화면): 조금 더 해 보자는 격려
-  const MORE = [
-    '조금만 더 해 볼까요? 5분을 채우면 한자가 머릿속에 더 오래 남아요.',
-    '좋은 출발이에요! 5분까지 조금만 더 힘내 봐요.',
-    '거의 다 왔어요! 몇 분만 더 공부하면 오늘 목표 5분 달성이에요.',
-    '잘하고 있어요! 조금 더 공부하면 실력이 쑥쑥 자라요.',
-  ];
   function todayTimeHtml(nudge = false) {
     const sec = todaySecs();
     const ds = fmt(today());
     let note = '';
     if (sec >= CHEER_AT) note = `<div class="cheer">🌟 ${cheerOf(ds)}</div>`;
     else if (nudge) {
+      // 짧고 한눈에: 5칸 막대(1칸 = 1분)와 '○분만 더!'
       const left = Math.max(1, Math.ceil((CHEER_AT - sec) / 60));
-      note = `<div class="cheer more">💪 ${MORE[[...ds].reduce((n, ch) => n + ch.charCodeAt(0), 0) % MORE.length]}</div>
-        <div class="small">오늘 목표 5분까지 <b>약 ${left}분</b> 남았어요. 아래 버튼으로 조금 더 공부해 봐요!</div>`;
+      const full = Math.min(5, sec / 60);
+      const cells = [0, 1, 2, 3, 4].map((k) => `<i style="--f:${Math.max(0, Math.min(1, full - k)) * 100}%"></i>`).join('');
+      note = `<div class="goal5" role="img" aria-label="목표 5분까지 ${left}분 남음">
+          <div class="g5-bar">${cells}<span class="g5-flag">🏁</span></div>
+          <div class="g5-msg">${left}분만 더! 💪</div>
+        </div>`;
     }
     return `<div class="time-box">⏱ 오늘 공부한 시간 <b>${fmtTime(sec)}</b>${note}</div>`;
   }
@@ -1325,6 +1332,10 @@
       const v = speechSynthesis.getVoices().find((x) => /^ko/i.test(x.lang));
       if (v) u.voice = v;
       u.onend = end;
+      // 마지막 낱말을 읽기 시작하면 그 낱말 길이만큼만 기다렸다가 끝난 것으로 봐요 (onend가 늦게 오는 기기에서 기다리지 않게)
+      const lastAt = text.trimEnd().search(/[^\s,.]+[\s,.]*$/);
+      const lastLen = text.slice(lastAt).replace(/[\s,.]/g, '').length;
+      u.onboundary = (e) => { if (e.charIndex >= lastAt) setTimeout(end, 150 + lastLen * 280); };
       u.onerror = () => setTimeout(end, guess); // 소리가 나지 않아도 읽는 시간만큼 기다려요
       speechSynthesis.speak(u);
       setTimeout(end, guess + 2500); // onend가 오지 않는 기기를 위한 안전장치
@@ -1359,6 +1370,41 @@
     });
     const next = document.getElementById('next');
     if (next) next.addEventListener('click', () => { commitLearn(step.idx); nextStep(); });
+  }
+
+  // 선생님 캐릭터가 문제 위에 잠깐 나타나 한마디 해요
+  const TEACHER_SVG = `<svg viewBox="0 0 120 120" aria-hidden="true">
+    <circle cx="60" cy="60" r="56" fill="#ffe9d6"/>
+    <path d="M22 58c0-26 17-42 38-42s38 16 38 42c-6-10-16-17-26-19-8 7-24 10-38 9-5 3-9 6-12 10z" fill="#5b3a29"/>
+    <circle cx="60" cy="14" r="11" fill="#5b3a29"/>
+    <ellipse cx="60" cy="66" rx="30" ry="32" fill="#ffd9b8"/>
+    <path d="M30 60c4-14 14-22 30-22s26 8 30 22c-6-8-16-12-30-12s-24 4-30 12z" fill="#5b3a29"/>
+    <circle cx="48" cy="66" r="8.5" fill="#fff" stroke="#3b3b4f" stroke-width="2.5"/><circle cx="72" cy="66" r="8.5" fill="#fff" stroke="#3b3b4f" stroke-width="2.5"/>
+    <path d="M56.5 66h7" stroke="#3b3b4f" stroke-width="2.5"/>
+    <circle cx="48" cy="67" r="3" fill="#3b3b4f"/><circle cx="72" cy="67" r="3" fill="#3b3b4f"/>
+    <circle cx="40" cy="80" r="4.5" fill="#ff9e9e" opacity=".55"/><circle cx="80" cy="80" r="4.5" fill="#ff9e9e" opacity=".55"/>
+    <path d="M51 84c5 6 13 6 18 0" fill="none" stroke="#c0504d" stroke-width="3" stroke-linecap="round"/></svg>`;
+  function teacherSays(html, ms = 2600) {
+    // 화면이 다시 그려져도 사라지지 않도록 문서에 붙이고, 문제 카드 위쪽에 맞춰 놓아요
+    const card = $app.querySelector('.lesson-card');
+    if (!card) return;
+    let pop = document.querySelector('.teacher-pop');
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.className = 'teacher-pop';
+      pop.setAttribute('role', 'status');
+      document.body.appendChild(pop);
+    }
+    const r = card.getBoundingClientRect();
+    pop.style.top = `${Math.max(12, r.top + 64)}px`;
+    pop.style.left = `${r.left + 8}px`;
+    pop.style.width = `${r.width - 16}px`;
+    pop.innerHTML = `<div class="tp-face">${TEACHER_SVG}</div><div class="tp-bubble">${html}</div>`;
+    pop.classList.remove('show');
+    void pop.offsetWidth;
+    pop.classList.add('show');
+    clearTimeout(pop._t);
+    pop._t = setTimeout(() => pop.classList.remove('show'), ms);
   }
 
   // 2. 활용 어휘 ① — 왼쪽(한자+음훈)과 오른쪽(뜻)을 선으로 연결
@@ -1468,7 +1514,7 @@
     $app.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => {
       if (locked()) return;
       if (step.reading !== undefined && step.reading !== null) {
-        document.getElementById('fb').innerHTML = '<div class="feedback no">👂 읽어 주는 소리를 끝까지 들어요.</div>';
+        teacherSays('천천히 생각할수록,<br>배우는 게 많아요!');
         return;
       }
       if (step.selL === null) {
@@ -1543,7 +1589,7 @@
     const next = session.steps[session.i + 1] || {};
     const nextLabel = next.kind === 'check' ? '다음 문제 →' : next.kind === 'infer' ? '추론하기 →' : '다음 →';
     return `<div class="card lesson-card">${stageHtml(step.stage)}
-      ${step.old ? `<p class="small muted center">${c.gradeName}에서 공부한 한자예요</p>` : ''}
+      ${step.old ? `<p class="small muted center">${c.gradeName}에서 공부한 한자예요</p>` : step.stage === 'review' ? '<p class="small muted center">어제 배운 한자예요</p>' : step.stage === 'missed' ? '<p class="small muted center">전에 틀렸던 한자예요</p>' : ''}
       ${wordQuestionHtml(c, step.word, step.graded ? stampHtml(step.ok) : '')}
       <form id="f" autocomplete="off">
         <div class="exam-inputs">
@@ -1966,30 +2012,48 @@
 
   /* ================= 화면: 한자 목록 ================= */
   let listGrade = null;
+  // 급수 한자: 급수별 한자 목록 + 그 급수의 레벨테스트·급수 시험 상태 (예전 '한자 목록'과 '급수 시험'을 합쳤어요)
   function renderList() {
     setTab('list');
     if (listGrade === null) listGrade = Math.min(S.gradeIdx, GRADES.length - 1);
-    const g = GRADES[listGrade];
-    const tabs = GRADES.map((x, k) => `<button class="${k === listGrade ? 'on' : ''}" data-g="${k}">${x.name}</button>`).join('');
+    const k = listGrade;
+    const g = GRADES[k];
+    const tabs = GRADES.map((x, j) => `<button class="${j === k ? 'on' : ''}" data-g="${j}">${S.passed[x.id] ? '✓ ' : ''}${x.name}</button>`).join('');
+    const lv = S.levels[g.id];
+    const ex = S.exams[g.id];
+    const now = k === S.gradeIdx && !S.passed[g.id];
+    let status;
+    if (S.passed[g.id]) status = '<span class="pill green">통과 ✓</span>';
+    else if (now) status = `<span class="pill">${{ level: '레벨테스트', study: '공부 중', exam: '시험 볼 차례', relearn: '다시 보기' }[S.phase] || ''}</span>`;
+    else status = '<span class="pill gray">잠김</span>';
     const cells = HANJA.slice(g.start, g.end).map((c) => {
       const cls = S.missed.includes(c.idx) ? 'missed' : S.learned[c.idx] ? 'learned' : S.known[c.idx] ? 'known' : 'locked';
-      return `<button class="cell-btn ${cls}" data-open="${c.idx}" aria-label="${c.h} ${hunum(c)}">
+      return `<button class="cell-btn ${cls} ${hideHunum ? 'hide-hu' : ''}" data-open="${c.idx}" aria-label="${c.h} ${hunum(c)}">
         <span class="hanja">${c.h}</span><span class="hu">${hunum(c)}</span></button>`;
     }).join('');
+    let action = '';
+    if (now && S.phase === 'exam') action = '<a class="btn block big" href="#/test">🏆 급수 시험 보기</a>';
+    else if (now && S.phase === 'relearn') action = '<a class="btn block big" href="#/relearn">🔁 틀린 한자 다시 보기</a>';
+    else if (now && S.phase === 'level') action = '<a class="btn block big" href="#/level">🧪 레벨테스트 보기</a>';
     $app.innerHTML = `
       <div class="card">
-        <div class="row"><h2 style="margin:0">한자 목록</h2><span class="spacer"></span>
+        <div class="row"><h2 style="margin:0">급수 한자</h2><span class="spacer"></span>
           <span class="small muted">배운 한자 ${S.order.length} / ${HANJA.length}</span></div>
+        <p class="small muted" style="margin:6px 0 0">레벨테스트 → 공부 → 급수 시험(급수 전체 한자). <b>100점</b>이면 다음 급수로 올라가요.</p>
       </div>
       <div class="tabs">${tabs}</div>
-      <div class="card">
-        <div class="row"><b>${g.name}</b>${S.passed[g.id] ? '<span class="pill green">통과 ✓</span>' : ''}</div>
+      <div class="card${now ? ' grade-now' : ''}">
+        <div class="row"><b style="font-size:20px">${g.name}</b> ${status}<span class="spacer"></span><span class="small muted">${g.end - g.start}자</span></div>
+        <div class="small muted" style="margin:4px 0 8px">${lv ? `레벨테스트: 아는 한자 ${lv.known}/${lv.total}` : '레벨테스트 전'}${ex ? ` · 급수 시험 ${ex.attempts}번, 최근 ${ex.last}점` : ''}</div>
+        ${action}
         <div class="legend"><span><i style="background:var(--blue)"></i>이미 아는 한자</span><span><i style="background:var(--green)"></i>공부한 한자</span>
           <span><i style="background:var(--red)"></i>다시 볼 한자</span><span><i style="background:var(--line)"></i>아직 안 배움</span></div>
+        <label class="row small" style="margin:8px 0 12px"><input type="checkbox" class="switch" id="hide" ${hideHunum ? 'checked' : ''}> 뜻·음 가리고 스스로 떠올리기</label>
         <div class="grid">${cells}</div>
       </div>
       <p class="small muted center">준비 중: ${UPCOMING_GRADES.join(' · ')}</p>`;
     $app.querySelectorAll('[data-g]').forEach((b) => b.addEventListener('click', () => { listGrade = +b.dataset.g; renderList(); }));
+    document.getElementById('hide').addEventListener('change', (e) => { hideHunum = e.target.checked; renderList(); });
     bindOpen();
   }
 
@@ -2327,47 +2391,10 @@
 
   /* ================= 화면: 급수 시험 탭 ================= */
   let hideHunum = false;
+  // 예전 '급수 시험' 주소(#/exam)는 '급수 한자'의 지금 급수로 보여 줘요
   function renderExamHome() {
-    setTab('exam');
-    const g = curGrade();
-    const rows = GRADES.map((x, k) => {
-      const lv = S.levels[x.id];
-      const ex = S.exams[x.id];
-      let status;
-      if (S.passed[x.id]) status = '<span class="pill green">통과 ✓</span>';
-      else if (k === S.gradeIdx) status = `<span class="pill">${{ level: '레벨테스트', study: '공부 중', exam: '시험 볼 차례', relearn: '다시 보기' }[S.phase] || ''}</span>`;
-      else status = '<span class="pill gray">잠김</span>';
-      return `<div class="card grade-item${k === S.gradeIdx && !S.passed[x.id] ? ' now' : ''}">
-        <div class="gname">${x.name}</div>
-        <div class="ginfo">${status}
-          <div class="small muted">${lv ? `레벨테스트: 아는 한자 ${lv.known}/${lv.total}` : '레벨테스트 전'}${ex ? ` · 시험 ${ex.attempts}번, 최근 ${ex.last}점` : ''}</div>
-        </div></div>`;
-    }).join('');
-    let review = '';
-    if (S.phase !== 'level' && S.phase !== 'done') {
-      const cells = HANJA.slice(g.start, g.end).map((c) => `
-        <button class="cell-btn ${S.missed.includes(c.idx) ? 'missed' : S.known[c.idx] ? 'known' : S.learned[c.idx] ? 'learned' : 'locked'} ${hideHunum ? 'hide-hu' : ''}" data-open="${c.idx}">
-          <span class="hanja">${c.h}</span><span class="hu">${hunum(c)}</span></button>`).join('');
-      review = `<div class="card">
-        <h2>📖 ${g.name} 전체 복습</h2>
-        <p class="small muted">급수 시험은 ${g.name} ${g.end - g.start}자를 모두 봐요. 훑어보며 뜻과 음을 떠올려 보세요.</p>
-        <label class="row small" style="margin:8px 0 12px"><input type="checkbox" class="switch" id="hide" ${hideHunum ? 'checked' : ''}> 뜻·음 가리고 스스로 떠올리기</label>
-        <div class="grid">${cells}</div>
-        ${S.phase === 'exam' ? '<a class="btn block big" href="#/test">🏆 급수 시험 보기</a>' : ''}
-      </div>`;
-    }
-    $app.innerHTML = `
-      <div class="card">
-        <h2>급수 시험</h2>
-        <p class="small muted" style="margin:0">레벨테스트 → 틀린 한자 공부 → 급수 시험(급수 전체) 순서로 진행해요.
-          <b>100점</b>이어야 다음 급수로 올라가요. 틀리면 틀린 한자를 다시 익히고 다시 도전해요.</p>
-      </div>
-      ${review}
-      ${rows}
-      <div class="card"><h3>준비 중인 급수</h3><div>${UPCOMING_GRADES.map((n) => `<span class="pill gray" style="margin:3px">${n}</span>`).join('')}</div></div>`;
-    const hide = document.getElementById('hide');
-    if (hide) hide.addEventListener('change', (e) => { hideHunum = e.target.checked; renderExamHome(); });
-    bindOpen();
+    listGrade = Math.min(S.gradeIdx, GRADES.length - 1);
+    renderList();
   }
 
   /* ================= 화면: 설정 ================= */
@@ -2634,6 +2661,16 @@
           <tr><th>이름</th><th>급수·단계</th><th>아는<br>한자</th><th>공부한<br>한자</th><th>급수<br>시험</th><th>오늘<br>시간</th><th>총<br>시간</th><th>최근</th></tr>${rows}</table></div>`
           : '<p class="muted">아직 학생이 없어요.</p>'}
       </div>
+      ${(() => {
+        const r = ranking();
+        const medal = (k) => ['🥇', '🥈', '🥉'][k - 1] || `${k}위`;
+        return `<div class="card">
+          <h3>🏆 이미 아는 한자 랭킹</h3>
+          <p class="small muted" style="margin-top:0">이미 아는 한자가 많은 순서예요. 같으면 공부한 한자가 많은 학생이 앞이에요. (학생은 자기 순위만 볼 수 있어요)</p>
+          ${r.length ? `<ol class="rank-list">${r.map((x) => `<li class="${x.rank <= 3 ? `top${x.rank}` : ''}"><span class="rk">${medal(x.rank)}</span><span class="nm">${esc(x.n)}</span>
+            <span class="sc"><b>${x.known}</b>자<small> · 공부 ${x.learned}</small></span></li>`).join('')}</ol>` : '<p class="muted">아직 학생이 없어요.</p>'}
+        </div>`;
+      })()}
       <div class="card">
         <form class="setting" id="certf" autocomplete="off">
           <div class="txt"><b>합격증에 넣을 이름</b><div class="small muted">비워 두면 넣지 않아요. 이 기기에 저장돼요.</div>
@@ -2707,7 +2744,7 @@
     who.textContent = user ? `👤 ${user}` : '';
     who.hidden = !user;
     document.getElementById('logout').hidden = !user;
-    document.querySelectorAll('.modal-back').forEach((m) => m.remove());
+    document.querySelectorAll('.modal-back, .teacher-pop').forEach((m) => m.remove());
     if (!['lesson', 'weekly', 'review', 'extra', 'relearn', 'oldreview'].includes(parts[0])) stopTimer();
     if (user && unsaved) { save(); unsaved = 0; }
     document.body.classList.remove('in-lesson', 'logged-out');
