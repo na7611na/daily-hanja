@@ -839,3 +839,11 @@ ol.plain li { margin: 4px 0; }
 .meta-tips li { margin: 6px 0; }
 ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .meta-cycle small { word-break: keep-all; padding: 0 2px; }
+
+/* 2단계 어휘 카드: 글자 수와 상관없이 한 줄로 (카드 폭에 맞춰 글자 크기를 줄여요: --fit은 app.js가 정해요) */
+.mbox .wchars.one-line { flex-wrap: nowrap; gap: 0 3px; max-width: 100%; min-width: 0; --fit: 1; --bs: 28px; --ss: 12px; }
+.wchars.one-line.n3 { --bs: 26px; --ss: 11.5px; }
+.wchars.one-line.n4 { --bs: 24px; --ss: 11px; }
+.wchars.one-line .wc { min-width: 0; }
+.wchars.one-line .wc b { font-size: calc(var(--bs) * var(--fit)); }
+.wchars.one-line .wc small { font-size: calc(var(--ss) * max(var(--fit), 0.9)); white-space: normal; word-break: keep-all; text-align: center; line-height: 1.2; }

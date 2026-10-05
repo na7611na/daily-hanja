@@ -1374,16 +1374,19 @@
 
   // 선생님 캐릭터가 문제 위에 잠깐 나타나 한마디 해요
   const TEACHER_SVG = `<svg viewBox="0 0 120 120" aria-hidden="true">
-    <circle cx="60" cy="60" r="56" fill="#ffe9d6"/>
-    <path d="M22 58c0-26 17-42 38-42s38 16 38 42c-6-10-16-17-26-19-8 7-24 10-38 9-5 3-9 6-12 10z" fill="#5b3a29"/>
-    <circle cx="60" cy="14" r="11" fill="#5b3a29"/>
-    <ellipse cx="60" cy="66" rx="30" ry="32" fill="#ffd9b8"/>
-    <path d="M30 60c4-14 14-22 30-22s26 8 30 22c-6-8-16-12-30-12s-24 4-30 12z" fill="#5b3a29"/>
-    <circle cx="48" cy="66" r="8.5" fill="#fff" stroke="#3b3b4f" stroke-width="2.5"/><circle cx="72" cy="66" r="8.5" fill="#fff" stroke="#3b3b4f" stroke-width="2.5"/>
-    <path d="M56.5 66h7" stroke="#3b3b4f" stroke-width="2.5"/>
-    <circle cx="48" cy="67" r="3" fill="#3b3b4f"/><circle cx="72" cy="67" r="3" fill="#3b3b4f"/>
-    <circle cx="40" cy="80" r="4.5" fill="#ff9e9e" opacity=".55"/><circle cx="80" cy="80" r="4.5" fill="#ff9e9e" opacity=".55"/>
-    <path d="M51 84c5 6 13 6 18 0" fill="none" stroke="#c0504d" stroke-width="3" stroke-linecap="round"/></svg>`;
+    <path d="M24 40 L30 14 L46 30 Z M96 40 L90 14 L74 30 Z" fill="#8a5a36"/>
+    <ellipse cx="60" cy="70" rx="40" ry="44" fill="#a8703f"/>
+    <ellipse cx="60" cy="84" rx="25" ry="27" fill="#f3dcb8"/>
+    <path d="M44 74q4 4 8 0M56 82q4 4 8 0M68 74q4 4 8 0M50 92q4 4 8 0M62 92q4 4 8 0" fill="none" stroke="#c9a77a" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="42" cy="52" r="16" fill="#fff"/><circle cx="78" cy="52" r="16" fill="#fff"/>
+    <circle cx="42" cy="52" r="17" fill="none" stroke="#3b3b4f" stroke-width="3"/><circle cx="78" cy="52" r="17" fill="none" stroke="#3b3b4f" stroke-width="3"/>
+    <path d="M59 50h2" stroke="#3b3b4f" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="44" cy="53" r="6.5" fill="#2b2118"/><circle cx="76" cy="53" r="6.5" fill="#2b2118"/>
+    <circle cx="46" cy="51" r="2.2" fill="#fff"/><circle cx="78" cy="51" r="2.2" fill="#fff"/>
+    <path d="M54 62 L66 62 L60 72 Z" fill="#f2a33a" stroke="#d8862a" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M22 72q-6 18 6 32M98 72q6 18-6 32" fill="none" stroke="#8a5a36" stroke-width="7" stroke-linecap="round"/>
+    <path d="M30 22 L60 10 L90 22 L60 32 Z" fill="#2f3550"/><path d="M60 22v0M86 23v12" stroke="#2f3550" stroke-width="2"/>
+    <circle cx="86" cy="37" r="3" fill="#f5b72f"/></svg>`;
   function teacherSays(html, ms = 2600) {
     // 화면이 다시 그려져도 사라지지 않도록 문서에 붙이고, 문제 카드 위쪽에 맞춰 놓아요
     const card = $app.querySelector('.lesson-card');
@@ -1414,7 +1417,7 @@
     const left = c.words.map((w, k) => {
       const ok = step.done.includes(k);
       return `<button class="mbox ml${ok ? ' ok' : ''}${step.selL === k ? ' sel' : ''}${step.reading === k ? ' reading' : ''}" data-w="${k}" ${ok ? 'disabled' : ''}>
-        ${wordCharsHtml(w, c.h)}<span class="dot"></span></button>`;
+        ${wordCharsHtml(w, c.h).replace('class="wchars"', `class="wchars one-line n${[...w.word].length}"`)}<span class="dot"></span></button>`;
     }).join('');
     const right = step.order.map((k) => {
       const ok = step.done.includes(k);
@@ -1452,8 +1455,19 @@
     }).join('');
   }
   window.addEventListener('resize', drawLines);
+  // 어휘 카드의 글자가 한 줄에 들어가도록 카드 폭에 맞춰 글자 크기를 줄여요
+  function fitOneLine() {
+    $app.querySelectorAll('.wchars.one-line').forEach((el) => {
+      let fit = 1;
+      el.style.setProperty('--fit', fit);
+      while (el.scrollWidth > el.clientWidth + 1 && fit > 0.7) { fit -= 0.04; el.style.setProperty('--fit', fit.toFixed(2)); }
+    });
+  }
+  window.addEventListener('resize', () => { if ($app.querySelector('.wchars.one-line')) fitOneLine(); });
   function bindMatch(step) {
     const c = C(step.idx);
+    fitOneLine();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitOneLine);
     requestAnimationFrame(drawLines);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawLines);
     if (step.done.length === c.words.length) { bindNext(); return; }
@@ -1514,7 +1528,7 @@
     $app.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => {
       if (locked()) return;
       if (step.reading !== undefined && step.reading !== null) {
-        teacherSays('천천히 생각할수록,<br>배우는 게 많아요!');
+        teacherSays('끝까지 듣고,<br>천천히 생각해 봐요!');
         return;
       }
       if (step.selL === null) {
