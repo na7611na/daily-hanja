@@ -847,3 +847,9 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .wchars.one-line .wc { min-width: 0; }
 .wchars.one-line .wc b { font-size: calc(var(--bs) * var(--fit)); }
 .wchars.one-line .wc small { font-size: calc(var(--ss) * max(var(--fit), 0.9)); white-space: normal; word-break: keep-all; text-align: center; line-height: 1.2; }
+
+/* 급수 한자: 급수 상자가 모두 화면 안에 (통과한 급수는 아래에 작게 '통과') */
+.tabs.grade-tabs { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 6px; overflow: visible; }
+.grade-tabs button { padding: 6px 2px; min-width: 0; white-space: nowrap; font-size: clamp(14px, 4.2vw, 17px); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
+.grade-tabs button small { font-family: inherit; font-size: 11px; color: var(--green); font-weight: 700; }
+.grade-tabs button.on small { color: #fff; }

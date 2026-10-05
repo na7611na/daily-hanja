@@ -18,5 +18,5 @@ const DONE_STAMP_SVG = `<svg viewBox="0 0 120 120" aria-hidden="true"><g transfo
 // 학습 전: 도장을 찍을 빈 자리
 const EMPTY_STAMP_SVG = `<svg viewBox="0 0 120 120" aria-hidden="true">
       <circle cx="60" cy="60" r="54" fill="none" stroke="#d9c6ad" stroke-width="3" stroke-dasharray="8 6"/>
-      <text x="60" y="56" text-anchor="middle" font-size="15" fill="#b9a68e" font-family="'Jua','Noto Sans KR',sans-serif">오늘의 학습</text>
-      <text x="60" y="78" text-anchor="middle" font-size="15" fill="#b9a68e" font-family="'Jua','Noto Sans KR',sans-serif">도장 자리</text></svg>`;
+      <text x="60" y="50" text-anchor="middle" font-size="17" fill="#b9a68e" font-family="'Jua','Noto Sans KR',sans-serif">매일</text>
+      <text x="60" y="84" text-anchor="middle" font-size="30" fill="#b9a68e" font-family="'Noto Serif KR','Noto Serif CJK KR',serif" font-weight="700">一 字</text></svg>`;

@@ -2032,7 +2032,7 @@
     if (listGrade === null) listGrade = Math.min(S.gradeIdx, GRADES.length - 1);
     const k = listGrade;
     const g = GRADES[k];
-    const tabs = GRADES.map((x, j) => `<button class="${j === k ? 'on' : ''}" data-g="${j}">${S.passed[x.id] ? '✓ ' : ''}${x.name}</button>`).join('');
+    const tabs = GRADES.map((x, j) => `<button class="${j === k ? 'on' : ''}${S.passed[x.id] ? ' passed' : ''}" data-g="${j}">${x.name}${S.passed[x.id] ? '<small>통과</small>' : ''}</button>`).join('');
     const lv = S.levels[g.id];
     const ex = S.exams[g.id];
     const now = k === S.gradeIdx && !S.passed[g.id];
@@ -2055,7 +2055,7 @@
           <span class="small muted">배운 한자 ${S.order.length} / ${HANJA.length}</span></div>
         <p class="small muted" style="margin:6px 0 0">레벨테스트 → 공부 → 급수 시험(급수 전체 한자). <b>100점</b>이면 다음 급수로 올라가요.</p>
       </div>
-      <div class="tabs">${tabs}</div>
+      <div class="tabs grade-tabs" style="--n:${GRADES.length}">${tabs}</div>
       <div class="card${now ? ' grade-now' : ''}">
         <div class="row"><b style="font-size:20px">${g.name}</b> ${status}<span class="spacer"></span><span class="small muted">${g.end - g.start}자</span></div>
         <div class="small muted" style="margin:4px 0 8px">${lv ? `레벨테스트: 아는 한자 ${lv.known}/${lv.total}` : '레벨테스트 전'}${ex ? ` · 급수 시험 ${ex.attempts}번, 최근 ${ex.last}점` : ''}</div>
