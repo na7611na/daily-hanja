@@ -777,8 +777,33 @@
     ? c.meanings.map((m, k) => [m, c.sounds[k]]) : [[c.meanings.join(', '), c.sounds.join(', ')]]);
   // learn: 1단계 '오늘의 한자'에서는 뜻·소리 칸이 누르면 읽어 주는 버튼이 되고, 아래 반복 줄은 없어요
   // 훈이 옛말이라 어려운 글자는 요즘 말로 풀어 줘요 (data.js의 EASY_MEANINGS)
-  const easyMeanHtml = (c) => (typeof EASY_MEANINGS !== 'undefined' && EASY_MEANINGS[c.h]
-    ? `<div class="easy-mean"><span class="em-tag">💬 쉬운 뜻</span><p>${esc(EASY_MEANINGS[c.h]).replace(/「([^」]*)」/g, '<b>$1</b>')}</p></div>` : '');
+  // 예문: [문장, 강조할 낱말] — 표준국어대사전의 용례 (data.js의 EASY_EXAMPLES)
+  const easyExample = (c) => {
+    const e = typeof EASY_EXAMPLES !== 'undefined' && EASY_EXAMPLES[c.h];
+    if (!e) return '';
+    const [text, word] = e;
+    return word ? esc(text).split(esc(word)).join(`<u>${esc(word)}</u>`) : esc(text);
+  };
+  // 훈장님: 갓을 쓰고 흰 수염이 난 옛날 서당 선생님
+  const HUNJANG_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="56" r="40" fill="#fbe7cf"/>
+    <ellipse cx="50" cy="60" rx="25" ry="27" fill="#f6d2ae"/>
+    <path d="M28 66c2 20 14 30 22 30s20-10 22-30c-6 6-14 8-22 8s-16-2-22-8z" fill="#fff" stroke="#ddd" stroke-width="1.5"/>
+    <path d="M40 70q10 6 20 0" fill="none" stroke="#e6e6e6" stroke-width="3" stroke-linecap="round"/>
+    <path d="M36 52q5-4 10 0M54 52q5-4 10 0" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+    <path d="M36 52q5-4 10 0M54 52q5-4 10 0" fill="none" stroke="#cfcfcf" stroke-width="1"/>
+    <path d="M38 58q3 3 6 0M56 58q3 3 6 0" fill="none" stroke="#3b2a1e" stroke-width="2.4" stroke-linecap="round"/>
+    <circle cx="35" cy="64" r="3.5" fill="#f4a3a3" opacity=".5"/><circle cx="65" cy="64" r="3.5" fill="#f4a3a3" opacity=".5"/>
+    <ellipse cx="50" cy="35" rx="44" ry="7" fill="#1f1f24" opacity=".92"/>
+    <path d="M36 35c0-14 6-22 14-22s14 8 14 22z" fill="#1f1f24" opacity=".95"/>
+    <path d="M36 31h28" stroke="#4b4b55" stroke-width="2"/>
+    <path d="M30 37q-2 16 4 26M70 37q2 16-4 26" fill="none" stroke="#1f1f24" stroke-width="1.5" stroke-dasharray="2 2"/></svg>`;
+  const easyMeanText = (c) => (typeof EASY_MEANINGS !== 'undefined' && EASY_MEANINGS[c.h]) || '';
+  // typing: 1단계에서는 비워 두고 bindLearn이 한 글자씩 써요
+  const easyMeanHtml = (c, typing = false) => (easyMeanText(c)
+    ? `<div class="easy-mean${typing ? ' typing' : ''}"><span class="em-face">${HUNJANG_SVG}</span><div class="em-body"><span class="em-tag">훈장님의 쉬운 뜻</span>
+        <p class="em-txt">${typing ? '' : esc(easyMeanText(c)).replace(/「([^」]*)」/g, '<b>$1</b>')}</p>
+        ${easyExample(c) ? `<p class="em-ex"${typing ? ' hidden' : ''}><span>📖 예문</span> <span class="em-ex-t">${typing ? '' : easyExample(c)}</span></p>` : ''}</div></div>` : '');
   function charHeadHtml(c, learn = null) {
     const pairs = hunumPairs(c);
     let n = 0;
@@ -794,7 +819,7 @@
         <span class="pill">${c.gradeName}</span>
         <div class="big-hanja">${c.h}</div>
         <div class="hunum-boxes">${pairs.map(([m, s]) => box('', '뜻(훈)', m) + box(' snd', '소리(음)', s)).join('')}</div>
-        ${easyMeanHtml(c)}
+        ${easyMeanHtml(c, !!(learn && easyMeanText(c) && !learn.easyDone))}
         ${learn ? '' : `<div class="hunum-read">"${hunum(c)}"</div>`}
       </div>`;
   }
@@ -1307,7 +1332,7 @@
     const total = hunumPairs(c).length * 2;
     const allHeard = step.heard >= total;
     let rec = '';
-    if (allHeard && !step.recorded) {
+    if (allHeard && !step.recorded && (step.easyDone || !easyMeanText(c))) {
       // 소리 내어 읽도록 이끄는 버튼 (녹음은 하지 않아요): 누르면 2초 동안 막대가 채워지고, 다 채워지면 사라져요
       rec = `<div class="read-box">
         <button type="button" class="btn rec-btn" id="rec" ${step.recording ? 'disabled' : ''}>뜻과 소리를 소리 내어 읽어 보세요</button>
@@ -1317,7 +1342,7 @@
     }
     return `<div class="card lesson-card">${stageHtml('learn')}${charHeadHtml(c, step)}
       ${isRedo(c.idx) ? '<p class="center redo-note">🔁 다시 배우는 한자예요. 이번에는 끝까지 모두 맞혀 봐요!</p>' : ''}
-      ${allHeard ? '' : `<p class="center tip">👆 <b>뜻</b>과 <b>소리</b> 칸을 <b>차례대로</b> 눌러 들어 보세요.</p>`}
+      ${allHeard ? (step.easyDone || !easyMeanText(c) ? '' : '<p class="center tip">📜 훈장님의 쉬운 뜻을 끝까지 읽어 보세요.</p>') : `<p class="center tip">👆 <b>뜻</b>과 <b>소리</b> 칸을 <b>차례대로</b> 눌러 들어 보세요.</p>`}
       <div id="fb"></div>
       ${rec}
       ${step.recorded ? nextBtn('활용 어휘 만나러 가기 →') : ''}</div>`;
@@ -1345,8 +1370,42 @@
       setTimeout(end, guess + 2500); // onend가 오지 않는 기기를 위한 안전장치
     } catch (e) { setTimeout(end, guess); }
   }
+  let typeTimer = null;
+  const TYPE_MS = 70; // 한 글자에 걸리는 시간
+  function typeEasy(step) {
+    clearInterval(typeTimer);
+    const c = C(step.idx);
+    const box = $app.querySelector('.easy-mean.typing');
+    if (!box || step.easyDone) return;
+    const txtEl = box.querySelector('.em-txt');
+    const exP = box.querySelector('.em-ex');
+    const exEl = box.querySelector('.em-ex-t');
+    const plain = easyMeanText(c).replace(/[「」]/g, '');
+    const ex = typeof EASY_EXAMPLES !== 'undefined' && EASY_EXAMPLES[c.h] ? EASY_EXAMPLES[c.h][0] : '';
+    const parts = [...plain];
+    const exParts = [...ex];
+    const total = parts.length + exParts.length;
+    step.easyPos = step.easyPos || 0;
+    const draw = () => {
+      const k = step.easyPos;
+      txtEl.textContent = parts.slice(0, k).join('');
+      if (exEl && k > parts.length) { exP.hidden = false; box.classList.add('on-ex'); exEl.textContent = exParts.slice(0, k - parts.length).join(''); }
+    };
+    draw();
+    typeTimer = setInterval(() => {
+      if (!document.body.contains(txtEl)) { clearInterval(typeTimer); return; }
+      step.easyPos += 1;
+      draw();
+      if (step.easyPos >= total) {
+        clearInterval(typeTimer);
+        step.easyDone = true;
+        setTimeout(() => { if (session && session.steps[session.i] === step) renderStep(); }, 400);
+      }
+    }, TYPE_MS);
+  }
   function bindLearn(step) {
     const c = C(step.idx);
+    typeEasy(step);
     const pairs = hunumPairs(c);
     const texts = pairs.flatMap(([m, s]) => [m, s]);
     $app.querySelectorAll('[data-say]').forEach((b) => b.addEventListener('click', () => {
@@ -2692,7 +2751,7 @@
         <td>${todaySecs(st) ? fmtTime(todaySecs(st)) : '-'}</td><td>${fmtTime(totalSecs(st))}</td>
         <td>${last ? shortDate(last) : '-'}</td></tr>${detail}`;
     }).join('');
-    const TABS = [['status', '학습 현황'], ['rank', '랭킹'], ['cert', '합격증'], ['settings', '설정']];
+    const TABS = [['status', '학습 현황'], ['rank', '랭킹'], ['easy', '쉬운 뜻'], ['cert', '합격증'], ['settings', '설정']];
     let body = '';
     if (teacherTab === 'status') {
       body = `<div class="card">
@@ -2709,6 +2768,19 @@
         <p class="small muted" style="margin-top:0">이미 아는 한자가 많은 순서예요. 같으면 공부한 한자가 많은 학생이 앞이에요. (학생은 자기 순위만 볼 수 있어요)</p>
         ${r.length ? `<ol class="rank-list">${r.map((x) => `<li class="${x.rank <= 3 ? `top${x.rank}` : ''}"><span class="rk">${medal(x.rank)}</span><span class="nm">${esc(shortName(x.n))}</span>
           <span class="sc"><b>${x.known}</b>자<small> · 공부 ${x.learned}</small></span></li>`).join('')}</ol>` : '<p class="muted">아직 학생이 없어요.</p>'}
+      </div>`;
+    } else if (teacherTab === 'easy') {
+      const keys = typeof EASY_MEANINGS === 'undefined' ? [] : Object.keys(EASY_MEANINGS);
+      const byGrade = GRADES.map((g) => ({ g, list: HANJA.slice(g.start, g.end).filter((c) => keys.includes(c.h)) })).filter((x) => x.list.length);
+      const mark = (t) => esc(t).replace(/「([^」]*)」/g, '<b>$1</b>');
+      body = `<div class="card">
+        <h3 style="margin-top:0">💬 쉬운 뜻 목록 <span class="small muted">${keys.length}자</span></h3>
+        <p class="small muted" style="margin-top:0">훈이 옛말이라 어려운 글자에 1단계 '오늘의 한자'와 한자 카드에서 보여 주는 풀이와 예문이에요. 예문은 표준국어대사전의 용례를 썼어요.</p>
+        ${byGrade.map(({ g, list }) => `<h4 class="easy-g">${g.name} <span class="small muted">${list.length}자</span></h4>
+          <div style="overflow-x:auto"><table class="class-table easy-table">
+            <tr><th>한자</th><th>훈 음</th><th>쉬운 뜻 · 예문</th></tr>
+            ${list.map((c) => `<tr><td class="hanja">${c.h}</td><td>${hunum(c)}</td><td>${mark(EASY_MEANINGS[c.h])}${easyExample(c) ? `<div class="ex">📖 ${easyExample(c)}</div>` : ''}</td></tr>`).join('')}
+          </table></div>`).join('')}
       </div>`;
     } else if (teacherTab === 'cert') {
       const items = list.map((n) => {

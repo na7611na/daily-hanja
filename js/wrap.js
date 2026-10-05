@@ -99,7 +99,7 @@
   }
 
   function walk(root) {
-    if (!root || SKIP.has(root.nodeName) || (root.closest && root.closest('svg, textarea, input, .ck, .hanja, .big-hanja'))) return;
+    if (!root || SKIP.has(root.nodeName) || (root.closest && root.closest('svg, textarea, input, .ck, .hanja, .big-hanja, .typing'))) return;
     // 짧은 굵은 글씨·표시 글씨는 한 덩어리로
     if (root.querySelectorAll) {
       root.querySelectorAll('b, strong, mark, em, .pos').forEach((el) => {
@@ -108,7 +108,7 @@
       if (/^(B|STRONG|MARK|EM)$/.test(root.nodeName) && root.textContent.length <= 12) root.classList.add('ck');
     }
     const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => (done.has(n) || !n.parentElement || n.parentElement.closest('script, style, textarea, svg, .ck') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+      acceptNode: (n) => (done.has(n) || !n.parentElement || n.parentElement.closest('script, style, textarea, svg, .ck, .typing') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
     });
     const list = [];
     while (tw.nextNode()) list.push(tw.currentNode);

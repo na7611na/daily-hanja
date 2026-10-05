@@ -876,3 +876,30 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .acct-btns { display: flex; gap: 6px; margin-left: auto; flex: none; }
 .acct-btns .btn, .acct-bar .btn { padding: 6px 10px; font-size: 14px; white-space: nowrap; }
 .acct-list input, .acct-bar input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+.easy-mean .em-ex { margin-top: 4px; padding-top: 6px; border-top: 1px dashed color-mix(in srgb, var(--accent) 35%, transparent); font-size: 15px; color: var(--ink); }
+.easy-mean .em-ex > span:first-child { font-family: var(--fun); font-size: 13px; color: var(--accent-dark); margin-right: 2px; }
+.easy-mean u, .easy-table u { text-decoration: none; background: var(--mark); border-radius: 4px; padding: 0 2px; }
+/* 선생님 메뉴: 쉬운 뜻 목록 */
+.easy-g { margin: 14px 0 6px; }
+.easy-table td { text-align: left; vertical-align: top; font-size: 14px; line-height: 1.5; }
+.easy-table td.hanja { font-size: 26px; text-align: center; }
+.easy-table td:nth-child(2) { white-space: nowrap; }
+.easy-table b { color: var(--accent-dark); }
+.easy-table .ex { margin-top: 4px; color: var(--ink-soft); }
+
+/* 훈장님의 쉬운 뜻 */
+.easy-mean { flex-direction: row !important; align-items: flex-start; gap: 10px !important; }
+.easy-mean .em-face { flex: none; width: 66px; height: 66px; }
+.easy-mean .em-face svg { width: 100%; height: 100%; display: block; }
+.easy-mean .em-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.easy-mean .em-txt { min-height: 1.5em; }
+.easy-mean.typing .em-txt::after, .easy-mean.typing .em-ex:not([hidden]) .em-ex-t::after { content: '▍'; color: var(--accent); animation: caret-blink .8s steps(1) infinite; }
+.easy-mean.typing.on-ex .em-txt::after { content: none; }
+@keyframes caret-blink { 50% { opacity: 0; } }
+.easy-table td:last-child { white-space: normal; word-break: keep-all; min-width: 0; }
+.easy-table { width: 100%; table-layout: fixed; }
+.easy-table th:first-child, .easy-table td:first-child { width: 44px; }
+.easy-table th:nth-child(2), .easy-table td:nth-child(2) { width: 74px; white-space: normal; }
+.tabs.teacher-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; overflow: visible; }
+.teacher-tabs button { padding: 6px 2px; font-size: clamp(13px, 3.8vw, 16px); white-space: nowrap; min-width: 0; }
