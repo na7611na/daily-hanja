@@ -812,3 +812,10 @@ ol.plain li { margin: 4px 0; }
   font-family: var(--fun); font-size: 19px; line-height: 1.35; color: var(--ink); box-shadow: 0 6px 18px rgba(0, 0, 0, .16); }
 .tp-bubble::before { content: ''; position: absolute; left: -13px; top: 50%; margin-top: -9px; border: 9px solid transparent; border-right: 12px solid var(--accent); border-left: 0; }
 @media (prefers-reduced-motion: reduce) { .teacher-pop { transition: opacity .2s; transform: none; } }
+
+/* 홈 통계 카드: 왼쪽에 큰 그림, 오른쪽에 숫자와 이름 */
+.home-stats > div { display: flex; align-items: center; justify-content: flex-start; gap: clamp(5px, 2vw, 14px); padding: 12px clamp(5px, 2.4vw, 18px); text-align: left; }
+.home-stats .st-ico { font-style: normal; font-size: clamp(26px, 8.6vw, 42px); line-height: 1; flex: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .12)); }
+.home-stats p { margin: 0; min-width: 0; }
+.home-stats b { font-size: clamp(26px, 8vw, 32px); }
+.home-stats span { font-size: clamp(11px, 3.2vw, 14px); white-space: normal; word-break: keep-all; line-height: 1.3; }

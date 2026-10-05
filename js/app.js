@@ -1100,11 +1100,11 @@
         <div class="week">${cells}</div>
       </div>
       <div class="card">
-        <div class="stats">
-          <div><b><small>🔥</small>${streak()}</b><span>연속 학습일</span></div>
-          <div><b><small>📚</small>${S.order.length}</b><span>공부한 한자</span></div>
-          <div><b><small>💡</small>${Object.keys(S.known).length}</b><span>이미 아는 한자</span></div>
-          ${(() => { const r = ranking(); const me = r.find((x) => x.n === user); return `<div class="rank-cell"><b><small>🏅</small>${me ? `${me.rank}<small class="unit">위</small>` : '-'}</b><span>${me ? `${r.length}명 중 ` : ''}랭킹</span></div>`; })()}
+        <div class="stats home-stats">
+          <div><i class="st-ico" aria-hidden="true">🔥</i><p><b>${streak()}</b><span>연속 학습일</span></p></div>
+          <div><i class="st-ico" aria-hidden="true">📚</i><p><b>${S.order.length}</b><span>공부한 한자</span></p></div>
+          <div><i class="st-ico" aria-hidden="true">💡</i><p><b>${Object.keys(S.known).length}</b><span>이미 아는 한자</span></p></div>
+          ${(() => { const r = ranking(); const me = r.find((x) => x.n === user); return `<div class="rank-cell"><i class="st-ico" aria-hidden="true">🏅</i><p><b>${me ? `${me.rank}<small class="unit">위</small>` : '-'}</b><span>${me ? `${r.length}명 중 ` : ''}랭킹</span></p></div>`; })()}
         </div>
         <div class="row" style="margin-top:16px"><b>${g.name}</b><span class="spacer"></span>
           <span class="small muted">아는 ${knownN} + 공부 ${learnedN} / ${total}자</span></div>
