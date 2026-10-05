@@ -2040,7 +2040,10 @@
     if (S.passed[g.id]) status = '<span class="pill green">통과 ✓</span>';
     else if (now) status = `<span class="pill">${{ level: '레벨테스트', study: '공부 중', exam: '시험 볼 차례', relearn: '다시 보기' }[S.phase] || ''}</span>`;
     else status = '<span class="pill gray">잠김</span>';
+    // 레벨테스트를 아직 안 본 급수는 정확한 레벨테스트를 위해 뜻과 음을 보여 주지 않아요
+    const sealed = !S.levels[g.id] && !S.passed[g.id] && !HANJA.slice(g.start, g.end).some((c) => S.learned[c.idx] || S.known[c.idx]);
     const cells = HANJA.slice(g.start, g.end).map((c) => {
+      if (sealed) return `<span class="cell-btn locked sealed" aria-label="${c.h}"><span class="hanja">${c.h}</span><span class="hu">?</span></span>`;
       const cls = S.missed.includes(c.idx) ? 'missed' : S.learned[c.idx] ? 'learned' : S.known[c.idx] ? 'known' : 'locked';
       return `<button class="cell-btn ${cls} ${hideHunum ? 'hide-hu' : ''}" data-open="${c.idx}" aria-label="${c.h} ${hunum(c)}">
         <span class="hanja">${c.h}</span><span class="hu">${hunum(c)}</span></button>`;
@@ -2060,14 +2063,15 @@
         <div class="row"><b style="font-size:20px">${g.name}</b> ${status}<span class="spacer"></span><span class="small muted">${g.end - g.start}자</span></div>
         <div class="small muted" style="margin:4px 0 8px">${lv ? `레벨테스트: 아는 한자 ${lv.known}/${lv.total}` : '레벨테스트 전'}${ex ? ` · 급수 시험 ${ex.attempts}번, 최근 ${ex.last}점` : ''}</div>
         ${action}
-        <div class="legend"><span><i style="background:var(--blue)"></i>이미 아는 한자</span><span><i style="background:var(--green)"></i>공부한 한자</span>
-          <span><i style="background:var(--red)"></i>다시 볼 한자</span><span><i style="background:var(--line)"></i>아직 안 배움</span></div>
-        <label class="row small" style="margin:8px 0 12px"><input type="checkbox" class="switch" id="hide" ${hideHunum ? 'checked' : ''}> 뜻·음 가리고 스스로 떠올리기</label>
+        ${sealed ? '' : `<div class="legend"><span><i style="background:var(--blue)"></i>이미 아는 한자</span><span><i style="background:var(--green)"></i>공부한 한자</span>
+          <span><i style="background:var(--red)"></i>다시 볼 한자</span><span><i style="background:var(--line)"></i>아직 안 배움</span></div>`}
+        ${sealed ? '<p class="small sealed-note">🔒 레벨테스트를 본 뒤에 뜻과 음을 볼 수 있어요. 미리 보지 않아야 내가 아는 한자를 정확히 알 수 있어요.</p>'
+          : `<label class="row small" style="margin:8px 0 12px"><input type="checkbox" class="switch" id="hide" ${hideHunum ? 'checked' : ''}> 뜻·음 가리고 스스로 떠올리기</label>`}
         <div class="grid">${cells}</div>
       </div>
       <p class="small muted center">준비 중: ${UPCOMING_GRADES.join(' · ')}</p>`;
     $app.querySelectorAll('[data-g]').forEach((b) => b.addEventListener('click', () => { listGrade = +b.dataset.g; renderList(); }));
-    document.getElementById('hide').addEventListener('change', (e) => { hideHunum = e.target.checked; renderList(); });
+    if (document.getElementById('hide')) document.getElementById('hide').addEventListener('change', (e) => { hideHunum = e.target.checked; renderList(); });
     bindOpen();
   }
 

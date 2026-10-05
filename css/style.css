@@ -853,3 +853,8 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .grade-tabs button { padding: 6px 2px; min-width: 0; white-space: nowrap; font-size: clamp(14px, 4.2vw, 17px); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
 .grade-tabs button small { font-family: inherit; font-size: 11px; color: var(--green); font-weight: 700; }
 .grade-tabs button.on small { color: #fff; }
+
+/* 레벨테스트 전 급수: 뜻·음 가림 */
+.cell-btn.sealed { cursor: default; }
+.cell-btn.sealed .hu { color: var(--ink-soft); opacity: .6; }
+.sealed-note { margin: 8px 0 12px; padding: 8px 12px; border-radius: 12px; background: var(--bg); color: var(--ink-soft); }
