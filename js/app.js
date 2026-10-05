@@ -2533,13 +2533,25 @@
   }
   let teacherOk = false;
   let teacherOpen = null;
+  let teacherTab = 'status';
+  // 선생님 메뉴: 이름 앞의 학년·반(예: '5-4 ', '5학년 4반 3번 ')은 빼고 보여 줘요
+  const shortName = (n) => {
+    const t = String(n).replace(/^\s*\d+\s*(?:학년|헉년|-|\.)?\s*\d*\s*반?\s*(?:\d+\s*번)?\s*/, '');
+    return /[가-힣A-Za-z]/.test(t) ? t : n;
+  };
+  const TEACHER_FIRST = ['강하윤', '강현우'];
+  function teacherOrder(list) {
+    const key = (n) => { const k = TEACHER_FIRST.indexOf(shortName(n)); return k < 0 ? TEACHER_FIRST.length : k; };
+    return list.slice().sort((a, b) => key(a) - key(b) || shortName(a).localeCompare(shortName(b), 'ko') || a.localeCompare(b, 'ko'));
+  }
   // 합격증: 새 창에 그려서 바로 인쇄 창을 열어요
   const CERT_KEY = 'everyday-hanja:cert';
   const certInfo = () => { try { return Object.assign({ school: '', teacher: '' }, JSON.parse(lsGet(CERT_KEY))); } catch (e) { return { school: '', teacher: '' }; } };
   function printCertificate(name, st, g) {
     const info = certInfo();
     const pd = st.passed[g.id];
-    const d = parseDate(pd);
+    const d = typeof pd === 'string' ? parseDate(pd) : today();
+    name = shortName(name); // 학년·반은 빼고 이름만
     const dateKo = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
     const sample = HANJA.slice(g.start, g.end).map((c) => c.h).join('');
     const w = window.open('', '_blank');
@@ -2579,7 +2591,7 @@
         <div class="info">총 학습 시간 ${fmtTime(totalSecs(st, pd))}</div>
         <div class="foot">
           <div class="date">${dateKo}</div>
-          <div class="sign">${info.school ? `${esc(info.school)} ` : '매일 한자 '}${info.teacher ? `선생님 ${esc(info.teacher)}` : ''}<span class="seal">${info.teacher ? '인' : '漢'}</span></div>
+          <div class="sign">${info.school ? `${esc(info.school)} ` : '매일 한자 '}${info.teacher ? `담임 ${esc(info.teacher)}` : ''}<span class="seal">${info.teacher ? '인' : '漢'}</span></div>
         </div>
       </div></div></div>
       <script>document.fonts.ready.then(() => setTimeout(() => print(), 300));<\/script>
@@ -2621,7 +2633,7 @@
       });
       return;
     }
-    const list = users();
+    const list = teacherOrder(users());
     const rows = list.map((n) => {
       const st = n === user ? S : loadState(n);
       const g = GRADES[Math.min(st.gradeIdx, GRADES.length - 1)];
@@ -2632,7 +2644,7 @@
       const days = [];
       for (let d = today(), k = 0; k < 14; k++, d = addDays(d, -1)) if (isWeekday(d) || (st.time || {})[fmt(d)]) days.push(fmt(d));
       const detail = teacherOpen === n ? `<tr class="detail"><td colspan="8">
-          <b>통과한 급수</b> ${passedG.length ? passedG.map((x) => `${x.name} <button class="btn soft small-btn" data-cert="${x.id}" data-st="${esc(n)}">🖨 합격증</button>`).join(' ') : '없음'}<br>
+          ${shortName(n) !== n ? `<b>입장 이름</b> ${esc(n)}<br>` : ''}<b>통과한 급수</b> ${passedG.length ? passedG.map((x) => x.name).join(', ') : '없음'}<br>
           <b>최근 2주 학습 시간</b> <span class="small muted">(모두 ${fmtTime(totalSecs(st))})</span>
           <div class="time-days">${days.slice().reverse().map((d) => `<span class="${(st.time || {})[d] ? '' : 'none'}"><small>${shortDate(d)}</small>${(st.time || {})[d] ? fmtTime(st.time[d]) : '-'}</span>`).join('')}</div>
           <b>선생님 확인을 기다리는 답</b>${(st.pending || []).length ? `<ul class="plain-list pend">${st.pending.map((q, k) => {
@@ -2645,47 +2657,67 @@
             <button class="btn soft" data-reset="${esc(n)}">비밀번호 초기화</button>
             <button class="btn ghost" data-del="${esc(n)}">학생 삭제</button>
           </div></td></tr>` : '';
-      return `<tr><td><button class="linkbtn" data-open-st="${esc(n)}">${esc(n)}</button></td>
+      return `<tr><td><button class="linkbtn" data-open-st="${esc(n)}">${esc(shortName(n))}</button></td>
         <td>${st.phase === 'done' ? '완료' : g.name}<div class="small muted">${PHASE_NAME[st.phase] || ''}${left}</div>${(st.pending || []).length ? `<div class="pill">🤔 확인 ${st.pending.length}</div>` : ''}</td>
         <td>${Object.keys(st.known).length}</td><td>${st.order.length}</td>
         <td>${ex ? `${ex.last}점<div class="small muted">${ex.attempts}번</div>` : '-'}</td>
         <td>${todaySecs(st) ? fmtTime(todaySecs(st)) : '-'}</td><td>${fmtTime(totalSecs(st))}</td>
         <td>${last ? shortDate(last) : '-'}</td></tr>${detail}`;
     }).join('');
-    $app.innerHTML = `
-      <div class="row" style="margin-bottom:10px"><a href="${back}" class="small">← 돌아가기</a></div>
-      <div class="card">
-        <h2>👩‍🏫 선생님 메뉴</h2>
-        <p class="small muted">공부한 학생 ${list.length}명 · 이름을 누르면 자세히 보고 비밀번호를 초기화할 수 있어요.</p>
+    const TABS = [['status', '학습 현황'], ['rank', '랭킹'], ['cert', '합격증'], ['settings', '설정']];
+    let body = '';
+    if (teacherTab === 'status') {
+      body = `<div class="card">
+        <p class="small muted" style="margin-top:0">공부한 학생 ${list.length}명 · 이름을 누르면 자세히 보고 비밀번호를 초기화할 수 있어요.</p>
         ${list.length ? `<div style="overflow-x:auto"><table class="class-table">
           <tr><th>이름</th><th>급수·단계</th><th>아는<br>한자</th><th>공부한<br>한자</th><th>급수<br>시험</th><th>오늘<br>시간</th><th>총<br>시간</th><th>최근</th></tr>${rows}</table></div>`
           : '<p class="muted">아직 학생이 없어요.</p>'}
+      </div>`;
+    } else if (teacherTab === 'rank') {
+      const r = ranking();
+      const medal = (k) => ['🥇', '🥈', '🥉'][k - 1] || `${k}위`;
+      body = `<div class="card">
+        <h3 style="margin-top:0">🏆 이미 아는 한자 랭킹</h3>
+        <p class="small muted" style="margin-top:0">이미 아는 한자가 많은 순서예요. 같으면 공부한 한자가 많은 학생이 앞이에요. (학생은 자기 순위만 볼 수 있어요)</p>
+        ${r.length ? `<ol class="rank-list">${r.map((x) => `<li class="${x.rank <= 3 ? `top${x.rank}` : ''}"><span class="rk">${medal(x.rank)}</span><span class="nm">${esc(shortName(x.n))}</span>
+          <span class="sc"><b>${x.known}</b>자<small> · 공부 ${x.learned}</small></span></li>`).join('')}</ol>` : '<p class="muted">아직 학생이 없어요.</p>'}
+      </div>`;
+    } else if (teacherTab === 'cert') {
+      const items = list.map((n) => {
+        const st = n === user ? S : loadState(n);
+        const passedG = GRADES.filter((x) => st.passed[x.id]);
+        return `<li><span class="nm">${esc(shortName(n))}</span><span class="cg">${passedG.length
+          ? passedG.map((x) => `<span class="cert-item">${x.name} <button class="btn soft small-btn" data-cert="${x.id}" data-st="${esc(n)}">🖨 출력</button></span>`).join('')
+          : '<span class="small muted">아직 통과한 급수가 없어요</span>'}</span></li>`;
+      }).join('');
+      body = `<div class="card">
+        <h3 style="margin-top:0">📜 합격증</h3>
+        <p class="small muted" style="margin-top:0">급수 시험에 통과한 급수만 '출력' 버튼이 나와요.</p>
+        ${list.length ? `<ul class="cert-list">${items}</ul>` : '<p class="muted">아직 학생이 없어요.</p>'}
       </div>
-      ${(() => {
-        const r = ranking();
-        const medal = (k) => ['🥇', '🥈', '🥉'][k - 1] || `${k}위`;
-        return `<div class="card">
-          <h3>🏆 이미 아는 한자 랭킹</h3>
-          <p class="small muted" style="margin-top:0">이미 아는 한자가 많은 순서예요. 같으면 공부한 한자가 많은 학생이 앞이에요. (학생은 자기 순위만 볼 수 있어요)</p>
-          ${r.length ? `<ol class="rank-list">${r.map((x) => `<li class="${x.rank <= 3 ? `top${x.rank}` : ''}"><span class="rk">${medal(x.rank)}</span><span class="nm">${esc(x.n)}</span>
-            <span class="sc"><b>${x.known}</b>자<small> · 공부 ${x.learned}</small></span></li>`).join('')}</ol>` : '<p class="muted">아직 학생이 없어요.</p>'}
-        </div>`;
-      })()}
       <div class="card">
         <form class="setting" id="certf" autocomplete="off">
           <div class="txt"><b>합격증에 넣을 이름</b><div class="small muted">비워 두면 넣지 않아요. 이 기기에 저장돼요.</div>
             <input id="cschool" class="text-input" maxlength="30" placeholder="학교 이름 (예: 한빛초등학교)" value="${esc(certInfo().school)}">
-            <input id="cteacher" class="text-input" maxlength="20" placeholder="선생님 이름" value="${esc(certInfo().teacher)}"><div id="cfb"></div></div>
+            <input id="cteacher" class="text-input" maxlength="20" placeholder="담임 이름" value="${esc(certInfo().teacher)}"><div id="cfb"></div></div>
           <button class="btn ghost">저장</button>
         </form>
-      </div>
-      <div class="card">
+      </div>`;
+    } else {
+      body = `<div class="card">
         <form class="setting" id="tpw" autocomplete="off">
           <div class="txt"><b>선생님 비밀번호 바꾸기</b><input id="tn" type="password" class="text-input" placeholder="새 비밀번호 (4글자 이상)"><div id="tfb"></div></div>
           <button class="btn ghost">바꾸기</button>
         </form>
         <button class="btn soft block" id="tout" style="margin-top:8px">선생님 메뉴 닫기</button>
       </div>`;
+    }
+    $app.innerHTML = `
+      <div class="row" style="margin-bottom:10px"><a href="${back}" class="small">← 돌아가기</a></div>
+      <h2 style="margin:0 0 10px">👩‍🏫 선생님 메뉴</h2>
+      <div class="tabs teacher-tabs">${TABS.map(([k, t]) => `<button class="${k === teacherTab ? 'on' : ''}" data-ttab="${k}">${t}</button>`).join('')}</div>
+      ${body}`;
+    $app.querySelectorAll('[data-ttab]').forEach((b) => b.addEventListener('click', () => { teacherTab = b.dataset.ttab; renderTeacher(); }));
     $app.querySelectorAll('[data-open-st]').forEach((b) => b.addEventListener('click', () => {
       teacherOpen = teacherOpen === b.dataset.openSt ? null : b.dataset.openSt;
       renderTeacher();
@@ -2712,7 +2744,7 @@
       const n = b.dataset.st;
       printCertificate(n, n === user ? S : loadState(n), GRADES.find((x) => x.id === b.dataset.cert));
     }));
-    document.getElementById('certf').addEventListener('submit', (e) => {
+    if (document.getElementById('certf')) document.getElementById('certf').addEventListener('submit', (e) => {
       e.preventDefault();
       lsSet(CERT_KEY, JSON.stringify({ school: document.getElementById('cschool').value.trim(), teacher: document.getElementById('cteacher').value.trim() }));
       document.getElementById('cfb').innerHTML = '<div class="feedback ok">저장했어요.</div>';
@@ -2725,14 +2757,14 @@
       teacherOpen = null;
       renderTeacher();
     }));
-    document.getElementById('tpw').addEventListener('submit', (e) => {
+    if (document.getElementById('tpw')) document.getElementById('tpw').addEventListener('submit', (e) => {
       e.preventDefault();
       const p = document.getElementById('tn').value;
       const ok = p.length >= 4;
       if (ok) setTeacher(p);
       document.getElementById('tfb').innerHTML = `<div class="feedback ${ok ? 'ok' : 'no'}">${ok ? '바꿨어요.' : '4글자 이상으로 입력해 주세요.'}</div>`;
     });
-    document.getElementById('tout').addEventListener('click', () => { teacherOk = false; location.hash = back; });
+    if (document.getElementById('tout')) document.getElementById('tout').addEventListener('click', () => { teacherOk = false; location.hash = back; });
   }
 
   /* ================= 라우터 ================= */
