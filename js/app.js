@@ -776,6 +776,9 @@
   const hunumPairs = (c) => (c.meanings.length === c.sounds.length
     ? c.meanings.map((m, k) => [m, c.sounds[k]]) : [[c.meanings.join(', '), c.sounds.join(', ')]]);
   // learn: 1단계 '오늘의 한자'에서는 뜻·소리 칸이 누르면 읽어 주는 버튼이 되고, 아래 반복 줄은 없어요
+  // 훈이 옛말이라 어려운 글자는 요즘 말로 풀어 줘요 (data.js의 EASY_MEANINGS)
+  const easyMeanHtml = (c) => (typeof EASY_MEANINGS !== 'undefined' && EASY_MEANINGS[c.h]
+    ? `<div class="easy-mean"><span class="em-tag">💬 쉬운 뜻</span><p>${esc(EASY_MEANINGS[c.h]).replace(/「([^」]*)」/g, '<b>$1</b>')}</p></div>` : '');
   function charHeadHtml(c, learn = null) {
     const pairs = hunumPairs(c);
     let n = 0;
@@ -791,6 +794,7 @@
         <span class="pill">${c.gradeName}</span>
         <div class="big-hanja">${c.h}</div>
         <div class="hunum-boxes">${pairs.map(([m, s]) => box('', '뜻(훈)', m) + box(' snd', '소리(음)', s)).join('')}</div>
+        ${easyMeanHtml(c)}
         ${learn ? '' : `<div class="hunum-read">"${hunum(c)}"</div>`}
       </div>`;
   }
@@ -2680,10 +2684,7 @@
               <span class="row" style="margin-top:4px"><button class="btn soft" data-acc="${k}" data-st="${esc(n)}">✔ 인정</button><button class="btn ghost" data-rej="${k}" data-st="${esc(n)}">인정 안 함</button></span></li>`;
           }).join('')}</ul>` : ' 없음<br>'}
           <b>최근 글짓기</b><ul class="plain-list">${st.writings.slice(-5).reverse().map((w) => `<li>${shortDate(w.date)} “${esc(w.text)}”</li>`).join('') || '<li>없음</li>'}</ul>
-          <div class="row" style="margin-top:8px">
-            <button class="btn soft" data-reset="${esc(n)}">비밀번호 초기화</button>
-            <button class="btn ghost" data-del="${esc(n)}">학생 삭제</button>
-          </div></td></tr>` : '';
+          <p class="small muted" style="margin:8px 0 0">비밀번호 초기화와 학생 삭제는 '설정' 탭에서 할 수 있어요.</p></td></tr>` : '';
       return `<tr><td><button class="linkbtn" data-open-st="${esc(n)}">${esc(shortName(n))}</button></td>
         <td>${st.phase === 'done' ? '완료' : g.name}<div class="small muted">${PHASE_NAME[st.phase] || ''}${left}</div>${(st.pending || []).length ? `<div class="pill">🤔 확인 ${st.pending.length}</div>` : ''}</td>
         <td>${Object.keys(st.known).length}</td><td>${st.order.length}</td>
@@ -2695,7 +2696,7 @@
     let body = '';
     if (teacherTab === 'status') {
       body = `<div class="card">
-        <p class="small muted" style="margin-top:0">공부한 학생 ${list.length}명 · 이름을 누르면 자세히 보고 비밀번호를 초기화할 수 있어요.</p>
+        <p class="small muted" style="margin-top:0">공부한 학생 ${list.length}명 · 이름을 누르면 자세히 볼 수 있어요.</p>
         ${list.length ? `<div style="overflow-x:auto"><table class="class-table">
           <tr><th>이름</th><th>급수·단계</th><th>아는<br>한자</th><th>공부한<br>한자</th><th>급수<br>시험</th><th>오늘<br>시간</th><th>총<br>시간</th><th>최근</th></tr>${rows}</table></div>`
           : '<p class="muted">아직 학생이 없어요.</p>'}
@@ -2732,6 +2733,20 @@
       </div>`;
     } else {
       body = `<div class="card">
+        <h3 style="margin-top:0">👥 학생 계정 관리</h3>
+        <p class="small muted" style="margin-top:0">🔑 초기화는 비밀번호를 새로 정하고, 🗑 삭제는 학생과 학습 기록을 지워요. 한 명씩 하거나, 여러 명을 골라 한꺼번에 할 수 있어요.</p>
+        ${list.length ? `<div class="acct-bar">
+            <label class="row small"><input type="checkbox" id="acct-all"> 모두 선택 <span class="muted" id="acct-n"></span></label>
+            <span class="spacer"></span>
+            <button class="btn soft small-btn" id="acct-reset" disabled>🔑 고른 학생 초기화</button>
+            <button class="btn ghost small-btn" id="acct-del" disabled>🗑 고른 학생 삭제</button>
+          </div>
+          <ul class="acct-list">${list.map((n) => `<li>
+            <label class="row"><input type="checkbox" class="acct-ck" value="${esc(n)}"><span class="nm">${esc(shortName(n))}</span>${shortName(n) !== n ? `<small class="muted">${esc(n)}</small>` : ''}</label>
+            <span class="acct-btns"><button class="btn soft small-btn" data-reset="${esc(n)}" title="비밀번호 초기화">🔑 초기화</button><button class="btn ghost small-btn" data-del="${esc(n)}" title="학생 삭제">🗑 삭제</button></span>
+          </li>`).join('')}</ul>` : '<p class="muted">아직 학생이 없어요.</p>'}
+      </div>
+      <div class="card">
         <form class="setting" id="tpw" autocomplete="off">
           <div class="txt"><b>선생님 비밀번호 바꾸기</b><input id="tn" type="password" class="text-input" placeholder="새 비밀번호 (4글자 이상)"><div id="tfb"></div></div>
           <button class="btn ghost">바꾸기</button>
@@ -2759,14 +2774,40 @@
       lsSet(stateKey(n), JSON.stringify(st));
       renderTeacher();
     }));
-    $app.querySelectorAll('[data-reset]').forEach((b) => b.addEventListener('click', () => {
-      const n = b.dataset.reset;
-      const pw = prompt(`${n}의 새 비밀번호를 입력하세요 (4글자 이상)`);
+    // 비밀번호 초기화·학생 삭제 (한 명 또는 고른 학생 모두)
+    const resetPw = (names) => {
+      const who = names.length === 1 ? shortName(names[0]) : `${names.length}명`;
+      const pw = prompt(`${who}의 새 비밀번호를 입력하세요 (4글자 이상)${names.length > 1 ? '\n고른 학생 모두 같은 비밀번호로 바뀌어요.' : ''}`);
       if (pw === null) return;
       if (pw.length < 4) { alert('4글자 이상으로 입력해 주세요.'); return; }
-      setPassword(n, pw);
-      alert(`${n}의 비밀번호를 바꿨어요.`);
-    }));
+      names.forEach((n) => setPassword(n, pw));
+      alert(`${who}의 비밀번호를 바꿨어요.`);
+    };
+    const delStudents = (names) => {
+      const who = names.length === 1 ? shortName(names[0]) : `${names.map(shortName).join(', ')} (${names.length}명)`;
+      if (!confirm(`${who}의 모든 학습 기록을 지우고 학생을 삭제할까요? 되돌릴 수 없어요.`)) return;
+      if (names.length > 1 && !confirm(`정말 ${names.length}명을 모두 삭제할까요?`)) return;
+      names.forEach((n) => { removeUser(n); if (n === user) logout(); });
+      teacherOpen = null;
+      renderTeacher();
+    };
+    $app.querySelectorAll('[data-reset]').forEach((b) => b.addEventListener('click', () => resetPw([b.dataset.reset])));
+    const checked = () => [...$app.querySelectorAll('.acct-ck:checked')].map((x) => x.value);
+    const syncBar = () => {
+      const n = checked().length;
+      const all = $app.querySelectorAll('.acct-ck').length;
+      ['acct-reset', 'acct-del'].forEach((id) => { const b = document.getElementById(id); if (b) b.disabled = !n; });
+      const lbl = document.getElementById('acct-n');
+      if (lbl) lbl.textContent = n ? `(${n}명)` : '';
+      const allBox = document.getElementById('acct-all');
+      if (allBox) { allBox.checked = n > 0 && n === all; allBox.indeterminate = n > 0 && n < all; }
+    };
+    $app.querySelectorAll('.acct-ck').forEach((x) => x.addEventListener('change', syncBar));
+    if (document.getElementById('acct-all')) {
+      document.getElementById('acct-all').addEventListener('change', (e) => { $app.querySelectorAll('.acct-ck').forEach((x) => { x.checked = e.target.checked; }); syncBar(); });
+      document.getElementById('acct-reset').addEventListener('click', () => { if (checked().length) resetPw(checked()); });
+      document.getElementById('acct-del').addEventListener('click', () => { if (checked().length) delStudents(checked()); });
+    }
     $app.querySelectorAll('[data-cert]').forEach((b) => b.addEventListener('click', () => {
       const n = b.dataset.st;
       printCertificate(n, n === user ? S : loadState(n), GRADES.find((x) => x.id === b.dataset.cert));
@@ -2776,14 +2817,7 @@
       lsSet(CERT_KEY, JSON.stringify({ school: document.getElementById('cschool').value.trim(), teacher: document.getElementById('cteacher').value.trim() }));
       document.getElementById('cfb').innerHTML = '<div class="feedback ok">저장했어요.</div>';
     });
-    $app.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
-      const n = b.dataset.del;
-      if (!confirm(`${n}의 모든 학습 기록을 지우고 학생을 삭제할까요? 되돌릴 수 없어요.`)) return;
-      removeUser(n);
-      if (n === user) logout();
-      teacherOpen = null;
-      renderTeacher();
-    }));
+    $app.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => delStudents([b.dataset.del])));
     if (document.getElementById('tpw')) document.getElementById('tpw').addEventListener('submit', (e) => {
       e.preventDefault();
       const p = document.getElementById('tn').value;

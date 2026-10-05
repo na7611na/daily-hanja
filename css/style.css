@@ -858,3 +858,21 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .cell-btn.sealed { cursor: default; }
 .cell-btn.sealed .hu { color: var(--ink-soft); opacity: .6; }
 .sealed-note { margin: 8px 0 12px; padding: 8px 12px; border-radius: 12px; background: var(--bg); color: var(--ink-soft); }
+
+/* 1단계: 쉬운 뜻 풀이 */
+.easy-mean { margin: 12px auto 0; max-width: 420px; padding: 10px 14px; border-radius: 16px; background: var(--s1-soft, var(--bg)); text-align: left; display: flex; flex-direction: column; gap: 4px; }
+.easy-mean .em-tag { flex: none; font-family: var(--fun); font-size: 14px; color: var(--accent-dark); white-space: nowrap; margin-top: 2px; }
+.easy-mean p { margin: 0; font-size: 16px; line-height: 1.55; }
+.easy-mean b { color: var(--accent-dark); }
+
+/* 선생님 메뉴 설정: 학생 계정 관리 */
+.acct-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 14px; background: var(--bg); margin-bottom: 8px; }
+.acct-bar label { gap: 6px; }
+.acct-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.acct-list li { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; padding: 8px 10px; border-radius: 14px; border: 2px solid var(--line); }
+.acct-list label { gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.acct-list .nm { font-weight: 700; }
+.acct-list small { font-size: 11px; }
+.acct-btns { display: flex; gap: 6px; margin-left: auto; flex: none; }
+.acct-btns .btn, .acct-bar .btn { padding: 6px 10px; font-size: 14px; white-space: nowrap; }
+.acct-list input, .acct-bar input { width: 20px; height: 20px; accent-color: var(--accent); }
