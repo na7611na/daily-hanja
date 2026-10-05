@@ -903,3 +903,4 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .easy-table th:nth-child(2), .easy-table td:nth-child(2) { width: 74px; white-space: normal; }
 .tabs.teacher-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; overflow: visible; }
 .teacher-tabs button { padding: 6px 2px; font-size: clamp(13px, 3.8vw, 16px); white-space: nowrap; min-width: 0; }
+.ex-src { font-size: 11px; color: var(--ink-soft); }

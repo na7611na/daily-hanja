@@ -781,8 +781,8 @@
   const easyExample = (c) => {
     const e = typeof EASY_EXAMPLES !== 'undefined' && EASY_EXAMPLES[c.h];
     if (!e) return '';
-    const [text, word] = e;
-    return word ? esc(text).split(esc(word)).join(`<u>${esc(word)}</u>`) : esc(text);
+    const [text, word, src] = e;
+    return (word ? esc(text).split(esc(word)).join(`<u>${esc(word)}</u>`) : esc(text)) + (src ? ` <small class="ex-src">(${esc(src)})</small>` : '');
   };
   // 훈장님: 갓을 쓰고 흰 수염이 난 옛날 서당 선생님
   const HUNJANG_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true">
@@ -801,7 +801,7 @@
   const easyMeanText = (c) => (typeof EASY_MEANINGS !== 'undefined' && EASY_MEANINGS[c.h]) || '';
   // typing: 1단계에서는 비워 두고 bindLearn이 한 글자씩 써요
   const easyMeanHtml = (c, typing = false) => (easyMeanText(c)
-    ? `<div class="easy-mean${typing ? ' typing' : ''}"><span class="em-face">${HUNJANG_SVG}</span><div class="em-body"><span class="em-tag">훈장님의 쉬운 뜻</span>
+    ? `<div class="easy-mean${typing ? ' typing' : ''}"><span class="em-face">${HUNJANG_SVG}</span><div class="em-body"><span class="em-tag">훈장님 가르침</span>
         <p class="em-txt">${typing ? '' : esc(easyMeanText(c)).replace(/「([^」]*)」/g, '<b>$1</b>')}</p>
         ${easyExample(c) ? `<p class="em-ex"${typing ? ' hidden' : ''}><span>📖 예문</span> <span class="em-ex-t">${typing ? '' : easyExample(c)}</span></p>` : ''}</div></div>` : '');
   function charHeadHtml(c, learn = null) {
@@ -1342,7 +1342,7 @@
     }
     return `<div class="card lesson-card">${stageHtml('learn')}${charHeadHtml(c, step)}
       ${isRedo(c.idx) ? '<p class="center redo-note">🔁 다시 배우는 한자예요. 이번에는 끝까지 모두 맞혀 봐요!</p>' : ''}
-      ${allHeard ? (step.easyDone || !easyMeanText(c) ? '' : '<p class="center tip">📜 훈장님의 쉬운 뜻을 끝까지 읽어 보세요.</p>') : `<p class="center tip">👆 <b>뜻</b>과 <b>소리</b> 칸을 <b>차례대로</b> 눌러 들어 보세요.</p>`}
+      ${allHeard ? (step.easyDone || !easyMeanText(c) ? '' : '<p class="center tip">📜 훈장님 가르침을 끝까지 읽어 보세요.</p>') : `<p class="center tip">👆 <b>뜻</b>과 <b>소리</b> 칸을 <b>차례대로</b> 눌러 들어 보세요.</p>`}
       <div id="fb"></div>
       ${rec}
       ${step.recorded ? nextBtn('활용 어휘 만나러 가기 →') : ''}</div>`;
@@ -2751,7 +2751,7 @@
         <td>${todaySecs(st) ? fmtTime(todaySecs(st)) : '-'}</td><td>${fmtTime(totalSecs(st))}</td>
         <td>${last ? shortDate(last) : '-'}</td></tr>${detail}`;
     }).join('');
-    const TABS = [['status', '학습 현황'], ['rank', '랭킹'], ['easy', '쉬운 뜻'], ['cert', '합격증'], ['settings', '설정']];
+    const TABS = [['status', '학습 현황'], ['rank', '랭킹'], ['easy', '옛말 풀이'], ['cert', '합격증'], ['settings', '설정']];
     let body = '';
     if (teacherTab === 'status') {
       body = `<div class="card">
@@ -2774,12 +2774,12 @@
       const byGrade = GRADES.map((g) => ({ g, list: HANJA.slice(g.start, g.end).filter((c) => keys.includes(c.h)) })).filter((x) => x.list.length);
       const mark = (t) => esc(t).replace(/「([^」]*)」/g, '<b>$1</b>');
       body = `<div class="card">
-        <h3 style="margin-top:0">💬 쉬운 뜻 목록 <span class="small muted">${keys.length}자</span></h3>
-        <p class="small muted" style="margin-top:0">훈이 옛말이라 어려운 글자에 1단계 '오늘의 한자'와 한자 카드에서 보여 주는 풀이와 예문이에요. 예문은 표준국어대사전의 용례를 썼어요.</p>
+        <h3 style="margin-top:0">📜 옛말 풀이 <span class="small muted">${keys.length}자</span></h3>
+        <p class="small muted" style="margin-top:0">훈이 옛말이라 어려운 글자에 1단계 '오늘의 한자'와 한자 카드에서 '훈장님 가르침'으로 보여 주는 풀이와 예문이에요. 예문은 훈(옛말)이 들어간 표준국어대사전의 용례이고, 사전에 없으면 널리 알려진 고전에서 가져왔어요. 예문이 없는 글자는 '예문 없음'으로 표시돼요.</p>
         ${byGrade.map(({ g, list }) => `<h4 class="easy-g">${g.name} <span class="small muted">${list.length}자</span></h4>
           <div style="overflow-x:auto"><table class="class-table easy-table">
-            <tr><th>한자</th><th>훈 음</th><th>쉬운 뜻 · 예문</th></tr>
-            ${list.map((c) => `<tr><td class="hanja">${c.h}</td><td>${hunum(c)}</td><td>${mark(EASY_MEANINGS[c.h])}${easyExample(c) ? `<div class="ex">📖 ${easyExample(c)}</div>` : ''}</td></tr>`).join('')}
+            <tr><th>한자</th><th>훈 음</th><th>풀이 · 예문</th></tr>
+            ${list.map((c) => `<tr><td class="hanja">${c.h}</td><td>${hunum(c)}</td><td>${mark(EASY_MEANINGS[c.h])}${easyExample(c) ? `<div class="ex">📖 ${easyExample(c)}</div>` : '<div class="ex muted">📖 예문 없음</div>'}</td></tr>`).join('')}
           </table></div>`).join('')}
       </div>`;
     } else if (teacherTab === 'cert') {
