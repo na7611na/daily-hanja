@@ -579,7 +579,11 @@
     try { s = JSON.parse(localStorage.getItem(sessKey())); } catch (e) { s = null; }
     if (!s || s.type !== type || s.savedOn !== fmt(today()) || !Array.isArray(s.steps) || !s.steps[s.i] || s.steps[s.i].kind === 'done') return null;
     // 읽어 주던 중이거나 막대가 채워지던 중이었으면 그 단계를 다시 할 수 있게 풀어 줘요
-    s.steps.forEach((st) => { if (st.reading !== undefined) st.reading = null; if (st.recording) st.recording = false; });
+    s.steps.forEach((st) => {
+      if (st.reading !== undefined) st.reading = null;
+      if (st.recording) st.recording = false;
+      if (st.kind === 'learn' && st.heard >= hunumPairs(C(st.idx)).length * 2) st.easyOn = true; // 다 들은 뒤였으면 가르침부터
+    });
     return s;
   }
 
@@ -784,20 +788,8 @@
     const [text, word, src] = e;
     return (word ? esc(text).split(esc(word)).join(`<u>${esc(word)}</u>`) : esc(text)) + (src ? ` <small class="ex-src">(${esc(src)})</small>` : '');
   };
-  // 훈장님: 갓을 쓰고 흰 수염이 난 옛날 서당 선생님
-  const HUNJANG_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true">
-    <circle cx="50" cy="56" r="40" fill="#fbe7cf"/>
-    <ellipse cx="50" cy="60" rx="25" ry="27" fill="#f6d2ae"/>
-    <path d="M28 66c2 20 14 30 22 30s20-10 22-30c-6 6-14 8-22 8s-16-2-22-8z" fill="#fff" stroke="#ddd" stroke-width="1.5"/>
-    <path d="M40 70q10 6 20 0" fill="none" stroke="#e6e6e6" stroke-width="3" stroke-linecap="round"/>
-    <path d="M36 52q5-4 10 0M54 52q5-4 10 0" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-    <path d="M36 52q5-4 10 0M54 52q5-4 10 0" fill="none" stroke="#cfcfcf" stroke-width="1"/>
-    <path d="M38 58q3 3 6 0M56 58q3 3 6 0" fill="none" stroke="#3b2a1e" stroke-width="2.4" stroke-linecap="round"/>
-    <circle cx="35" cy="64" r="3.5" fill="#f4a3a3" opacity=".5"/><circle cx="65" cy="64" r="3.5" fill="#f4a3a3" opacity=".5"/>
-    <ellipse cx="50" cy="35" rx="44" ry="7" fill="#1f1f24" opacity=".92"/>
-    <path d="M36 35c0-14 6-22 14-22s14 8 14 22z" fill="#1f1f24" opacity=".95"/>
-    <path d="M36 31h28" stroke="#4b4b55" stroke-width="2"/>
-    <path d="M30 37q-2 16 4 26M70 37q2 16-4 26" fill="none" stroke="#1f1f24" stroke-width="1.5" stroke-dasharray="2 2"/></svg>`;
+  // 훈장님: 김홍도 〈서당〉(18세기, 퍼블릭 도메인)의 훈장님 얼굴 — img/hunjang.jpg
+  const HUNJANG_SVG = '<img src="img/hunjang.jpg" alt="" draggable="false">';
   const easyMeanText = (c) => (typeof EASY_MEANINGS !== 'undefined' && EASY_MEANINGS[c.h]) || '';
   // typing: 1단계에서는 비워 두고 bindLearn이 한 글자씩 써요
   const easyMeanHtml = (c, typing = false) => (easyMeanText(c)
@@ -819,7 +811,7 @@
         <span class="pill">${c.gradeName}</span>
         <div class="big-hanja">${c.h}</div>
         <div class="hunum-boxes">${pairs.map(([m, s]) => box('', '뜻(훈)', m) + box(' snd', '소리(음)', s)).join('')}</div>
-        ${easyMeanHtml(c, !!(learn && easyMeanText(c) && !learn.easyDone))}
+        ${learn && !learn.easyOn ? '' : easyMeanHtml(c, !!(learn && easyMeanText(c) && !learn.easyDone))}
         ${learn ? '' : `<div class="hunum-read">"${hunum(c)}"</div>`}
       </div>`;
   }
@@ -1332,7 +1324,7 @@
     const total = hunumPairs(c).length * 2;
     const allHeard = step.heard >= total;
     let rec = '';
-    if (allHeard && !step.recorded && (step.easyDone || !easyMeanText(c))) {
+    if (allHeard && step.easyOn && !step.recorded && (step.easyDone || !easyMeanText(c))) {
       // 소리 내어 읽도록 이끄는 버튼 (녹음은 하지 않아요): 누르면 2초 동안 막대가 채워지고, 다 채워지면 사라져요
       rec = `<div class="read-box">
         <button type="button" class="btn rec-btn" id="rec" ${step.recording ? 'disabled' : ''}>뜻과 소리를 소리 내어 읽어 보세요</button>
@@ -1342,7 +1334,7 @@
     }
     return `<div class="card lesson-card">${stageHtml('learn')}${charHeadHtml(c, step)}
       ${isRedo(c.idx) ? '<p class="center redo-note">🔁 다시 배우는 한자예요. 이번에는 끝까지 모두 맞혀 봐요!</p>' : ''}
-      ${allHeard ? (step.easyDone || !easyMeanText(c) ? '' : '<p class="center tip">📜 훈장님 가르침을 끝까지 읽어 보세요.</p>') : `<p class="center tip">👆 <b>뜻</b>과 <b>소리</b> 칸을 <b>차례대로</b> 눌러 들어 보세요.</p>`}
+      ${allHeard ? (!step.easyOn ? '<p class="center tip">👂 끝까지 들어 보세요.</p>' : step.easyDone || !easyMeanText(c) ? '' : '<p class="center tip">📜 훈장님 가르침을 끝까지 읽어 보세요.</p>') : `<p class="center tip">👆 <b>뜻</b>과 <b>소리</b> 칸을 <b>차례대로</b> 눌러 들어 보세요.</p>`}
       <div id="fb"></div>
       ${rec}
       ${step.recorded ? nextBtn('활용 어휘 만나러 가기 →') : ''}</div>`;
@@ -1371,7 +1363,7 @@
     } catch (e) { setTimeout(end, guess); }
   }
   let typeTimer = null;
-  const TYPE_MS = 70; // 한 글자에 걸리는 시간
+  const TYPE_MS = 100; // 한 글자에 걸리는 시간 (0.1초)
   function typeEasy(step) {
     clearInterval(typeTimer);
     const c = C(step.idx);
@@ -1410,7 +1402,8 @@
     const texts = pairs.flatMap(([m, s]) => [m, s]);
     $app.querySelectorAll('[data-say]').forEach((b) => b.addEventListener('click', () => {
       const k = +b.dataset.say;
-      speak(texts[k]);
+      // 마지막 칸을 다 읽어 준 뒤에 훈장님 가르침이 나타나요
+      speak(texts[k], k === texts.length - 1 ? () => { if (step.heard >= texts.length && !step.easyOn) { step.easyOn = true; if (session && session.steps[session.i] === step) renderStep(); } } : undefined);
       if (k === step.heard) { step.heard++; renderStep(); }
       else if (k > step.heard) {
         b.classList.add('shake');
@@ -1550,25 +1543,14 @@
         const L = $app.querySelector(`[data-w="${step.selL}"]`);
         const R = $app.querySelector(`[data-m="${step.selR}"]`);
         [L, R].forEach((x) => x.classList.add('shake', 'bad'));
-        document.getElementById('fb').innerHTML = `<div class="feedback no">앗, 다시 생각해 봐요! 🤔
-          <b>${w.read}</b> = ${wordParts(w).map((p) => `${p.m} ${p.s}`).join(' + ')}</div>`;
+        document.getElementById('fb').innerHTML = '';
+        teacherSays('천천히 다시<br>생각해 봐요!');
         step.selL = step.selR = null;
         setTimeout(() => { [L, R].forEach((x) => x.classList.remove('shake', 'bad', 'sel')); }, 600);
         // 아무거나 눌러 맞히지 않도록 3초 동안 멈춰요 (그동안 음훈을 읽어 봐요)
         const board = document.getElementById('mboard');
         board.classList.add('locked');
-        let n = 3;
-        const fb = document.getElementById('fb');
-        fb.insertAdjacentHTML('beforeend', `<div class="lock-msg">⏳ 음훈을 읽고 생각해 봐요 <b id="lockn">${n}</b></div>`);
-        const t = setInterval(() => {
-          n--;
-          const el = document.getElementById('lockn');
-          if (n > 0 && el) { el.textContent = n; return; }
-          clearInterval(t);
-          board.classList.remove('locked');
-          const m = fb.querySelector('.lock-msg');
-          if (m) m.remove();
-        }, 1000);
+        setTimeout(() => board.classList.remove('locked'), 3000);
       }
     };
     const locked = () => document.getElementById('mboard').classList.contains('locked');
@@ -1643,12 +1625,9 @@
         step.cur = left.length ? left[0] : null;
         renderStep();
       } else {
-        const w = c.words[k];
         b.classList.add('shake', 'bad');
         setTimeout(() => b.classList.remove('shake', 'bad'), 600);
-        document.getElementById('fb').innerHTML = step.filled.includes(k)
-          ? `<div class="feedback no">🤔 <b>'${w.read}'</b>${josa(w.read, '은')} 이미 다른 빈칸에 넣었어요. 문장을 다시 읽어 봐요.</div>`
-          : `<div class="feedback no">🤔 <b>'${w.read}'</b>${josa(w.read, '은')} '${w.mean}'${josa(w.mean, '이라는')} 뜻이에요. 이 문장에 어울리는지 다시 생각해 봐요.</div>`;
+        teacherSays('천천히 다시<br>생각해 봐요!');
       }
     }));
   }
