@@ -2624,6 +2624,7 @@
   let teacherOk = false;
   let teacherOpen = null;
   let teacherTab = 'status';
+  let easyGrade = 0; // 옛말 풀이 탭에서 보고 있는 급수
   // 선생님 메뉴: 이름 앞의 학년·반(예: '5-4 ', '5학년 4반 3번 ')은 빼고 보여 줘요
   const shortName = (n) => {
     const t = String(n).replace(/^\s*\d+\s*(?:학년|헉년|-|\.)?\s*\d*\s*반?\s*(?:\d+\s*번)?\s*/, '');
@@ -2771,12 +2772,15 @@
       </div>`;
     } else if (teacherTab === 'easy') {
       const keys = typeof EASY_MEANINGS === 'undefined' ? [] : Object.keys(EASY_MEANINGS);
-      const byGrade = GRADES.map((g) => ({ g, list: HANJA.slice(g.start, g.end).filter((c) => keys.includes(c.h)) })).filter((x) => x.list.length);
+      const byGrade = GRADES.map((g, k) => ({ g, k, list: HANJA.slice(g.start, g.end).filter((c) => keys.includes(c.h)) })).filter((x) => x.list.length);
+      if (!byGrade.some((x) => x.k === easyGrade)) easyGrade = byGrade.length ? byGrade[0].k : 0;
+      const shown = byGrade.filter((x) => x.k === easyGrade);
       const mark = (t) => esc(t).replace(/「([^」]*)」/g, '<b>$1</b>');
       body = `<div class="card">
         <h3 style="margin-top:0">📜 옛말 풀이 <span class="small muted">${keys.length}자</span></h3>
         <p class="small muted" style="margin-top:0">훈이 옛말이라 어려운 글자에 1단계 '오늘의 한자'와 한자 카드에서 '훈장님 가르침'으로 보여 주는 풀이와 예문이에요. 예문은 훈(옛말)이 들어간 표준국어대사전의 용례이고, 사전에 없으면 널리 알려진 고전에서 가져왔어요. 예문이 없는 글자는 '예문 없음'으로 표시돼요.</p>
-        ${byGrade.map(({ g, list }) => `<h4 class="easy-g">${g.name} <span class="small muted">${list.length}자</span></h4>
+        <div class="tabs grade-tabs easy-tabs" style="--n:${byGrade.length}">${byGrade.map(({ g, k, list }) => `<button class="${k === easyGrade ? 'on' : ''}" data-eg="${k}">${g.name}<small>${list.length}자</small></button>`).join('')}</div>
+        ${shown.map(({ g, list }) => `<h4 class="easy-g">${g.name} <span class="small muted">${list.length}자</span></h4>
           <div style="overflow-x:auto"><table class="class-table easy-table">
             <tr><th>한자</th><th>훈 음</th><th>풀이 · 예문</th></tr>
             ${list.map((c) => `<tr><td class="hanja">${c.h}</td><td>${hunum(c)}</td><td>${mark(EASY_MEANINGS[c.h])}${easyExample(c) ? `<div class="ex">📖 ${easyExample(c)}</div>` : '<div class="ex muted">📖 예문 없음</div>'}</td></tr>`).join('')}
@@ -2832,6 +2836,7 @@
       <div class="tabs teacher-tabs">${TABS.map(([k, t]) => `<button class="${k === teacherTab ? 'on' : ''}" data-ttab="${k}">${t}</button>`).join('')}</div>
       ${body}`;
     $app.querySelectorAll('[data-ttab]').forEach((b) => b.addEventListener('click', () => { teacherTab = b.dataset.ttab; renderTeacher(); }));
+    $app.querySelectorAll('[data-eg]').forEach((b) => b.addEventListener('click', () => { easyGrade = +b.dataset.eg; renderTeacher(); }));
     $app.querySelectorAll('[data-open-st]').forEach((b) => b.addEventListener('click', () => {
       teacherOpen = teacherOpen === b.dataset.openSt ? null : b.dataset.openSt;
       renderTeacher();
