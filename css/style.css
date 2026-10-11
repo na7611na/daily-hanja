@@ -916,3 +916,7 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .acct-bar label { font-size: clamp(12px, 3.6vw, 14px); gap: 4px; }
 #acct-n { white-space: nowrap; font-size: 12px; }
 @media (max-width: 360px) { #acct-n { display: none; } .acct-bar .btn { padding: 6px 5px; } }
+.tts-link { margin: 10px 0 0; }
+.tts-link .linkbtn { color: var(--ink-soft); font-size: 13px; }
+.tts-tips li { margin: 6px 0; line-height: 1.5; }
+.tts-pop { text-align: left; }

@@ -1337,31 +1337,110 @@
       ${allHeard ? (!step.easyOn ? '<p class="center tip">👂 끝까지 들어 보세요.</p>' : step.easyDone || !easyMeanText(c) ? '' : '<p class="center tip">📜 훈장님 가르침을 끝까지 읽어 보세요.</p>') : `<p class="center tip">👆 <b>뜻</b>과 <b>소리</b> 칸을 <b>차례대로</b> 눌러 들어 보세요.</p>`}
       <div id="fb"></div>
       ${rec}
+      <p class="center tts-link"><button type="button" class="linkbtn small" id="tts-help">🔇 소리가 안 들려요</button></p>
       ${step.recorded ? nextBtn('활용 어휘 만나러 가기 →') : ''}</div>`;
   }
   // 읽어 주기. onEnd는 다 읽은 뒤(소리를 낼 수 없는 기기에서는 읽는 데 걸릴 만큼 기다린 뒤) 한 번 불러요
+  /* ---------- 읽어 주기 (기기의 음성 합성) ---------- */
+  // 기기마다 다른 문제를 피해요:
+  //  - 목소리 목록이 늦게 오는 기기: voiceschanged를 기다렸다가 한국어 목소리를 골라요
+  //  - 말하던 것을 멈추고 바로 다시 말하면 소리가 안 나는 기기(안드로이드 크롬): 멈춘 뒤 잠깐 쉬고 말해요
+  //  - 말하기 객체가 지워져 끝 신호가 안 오는 기기: 객체를 붙잡아 둬요
+  //  - 잠깐 멈춤 상태로 굳는 기기: resume()으로 깨워요
+  let koVoice = null;
+  const pickVoice = () => {
+    try {
+      const vs = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+      koVoice = vs.find((x) => /^ko[-_]KR/i.test(x.lang) && x.localService) || vs.find((x) => /^ko/i.test(x.lang)) || null;
+      return vs;
+    } catch (e) { return []; }
+  };
+  if (window.speechSynthesis) {
+    pickVoice();
+    try { speechSynthesis.addEventListener('voiceschanged', pickVoice); } catch (e) { speechSynthesis.onvoiceschanged = pickVoice; }
+  }
+  // 소리를 낼 수 있는지: 'ok' | 'novoice'(한국어 목소리 없음) | 'none'(읽어 주기 기능 없음) | 'unknown'
+  function ttsStatus() {
+    if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') return 'none';
+    const vs = pickVoice();
+    if (!vs.length) return 'unknown';
+    return koVoice ? 'ok' : 'novoice';
+  }
+  let speakingU = null;
   function speak(text, onEnd) {
     let done = false;
     const end = () => { if (!done) { done = true; if (onEnd) onEnd(); } };
     const guess = 900 + text.replace(/\s/g, '').length * 260;
     try {
-      if (!window.speechSynthesis) { setTimeout(end, guess); return; }
-      speechSynthesis.cancel();
+      if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') { ttsFailed(); setTimeout(end, guess); return; }
+      const busy = speechSynthesis.speaking || speechSynthesis.pending;
+      if (busy) speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ko-KR';
       u.rate = 0.85;
-      const v = speechSynthesis.getVoices().find((x) => /^ko/i.test(x.lang));
-      if (v) u.voice = v;
-      u.onend = end;
+      u.volume = 1;
+      if (!koVoice) pickVoice();
+      if (koVoice) u.voice = koVoice;
+      let started = false;
+      u.onstart = () => { started = true; ttsWorked(); };
+      u.onend = () => { started = true; end(); };
       // 마지막 낱말을 읽기 시작하면 그 낱말 길이만큼만 기다렸다가 끝난 것으로 봐요 (onend가 늦게 오는 기기에서 기다리지 않게)
       const lastAt = text.trimEnd().search(/[^\s,.]+[\s,.]*$/);
       const lastLen = text.slice(lastAt).replace(/[\s,.]/g, '').length;
-      u.onboundary = (e) => { if (e.charIndex >= lastAt) setTimeout(end, 150 + lastLen * 280); };
-      u.onerror = () => setTimeout(end, guess); // 소리가 나지 않아도 읽는 시간만큼 기다려요
-      speechSynthesis.speak(u);
+      u.onboundary = (e) => { started = true; if (e.charIndex >= lastAt) setTimeout(end, 150 + lastLen * 280); };
+      u.onerror = (e) => { if (!e || e.error !== 'interrupted') ttsFailed(); setTimeout(end, guess); }; // 소리가 나지 않아도 읽는 시간만큼 기다려요
+      speakingU = u; // 지워지지 않게 붙잡아 둬요
+      const go = () => {
+        try { speechSynthesis.resume(); } catch (e) { /* 무시 */ }
+        speechSynthesis.speak(u);
+        // 1.5초가 지나도 말을 시작하지 않으면 이 기기에서는 소리가 안 나는 거예요
+        setTimeout(() => { if (!started && !done) ttsFailed(); }, 1500);
+      };
+      if (busy) setTimeout(go, 80); else go();
       setTimeout(end, guess + 2500); // onend가 오지 않는 기기를 위한 안전장치
-    } catch (e) { setTimeout(end, guess); }
+    } catch (e) { ttsFailed(); setTimeout(end, guess); }
   }
+  // 소리가 안 나는 기기에서는 한 번 안내해요 (이 기기에 기억)
+  let ttsOkSeen = false;
+  function ttsWorked() { ttsOkSeen = true; }
+  function ttsFailed() {
+    if (ttsOkSeen) return;
+    if (lsGet('everyday-hanja:tts-note')) return;
+    lsSet('everyday-hanja:tts-note', '1');
+    setTimeout(() => openTtsHelp(), 300);
+  }
+  function ttsHelpHtml() {
+    const st = ttsStatus();
+    const ua = navigator.userAgent;
+    const inApp = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//i.test(ua);
+    const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const samsung = /SamsungBrowser/i.test(ua);
+    const tips = [];
+    if (inApp) tips.push('지금 <b>카카오톡·네이버 같은 앱 안의 창</b>으로 열었어요. 오른쪽 위 메뉴에서 <b>"다른 브라우저로 열기"</b>를 눌러 <b>크롬</b>이나 <b>삼성 인터넷</b>으로 열어 주세요.');
+    tips.push('기기의 <b>소리(미디어 음량)</b>가 켜져 있는지, <b>무음·방해 금지 모드</b>가 아닌지 확인해 주세요.');
+    if (ios) tips.push('아이패드는 <b>설정 › 손쉬운 사용 › 읽기 및 말하기 › 음성</b>에서 <b>한국어</b> 목소리를 내려받아 주세요. 옆면의 무음 스위치도 확인해 주세요.');
+    else tips.push(`안드로이드 태블릿은 <b>설정 › 일반(또는 접근성) › 텍스트 음성 변환(TTS)</b>에서 기본 엔진을 <b>${samsung ? '삼성 TTS 또는 ' : ''}Google 음성 서비스</b>로 고르고, <b>언어를 한국어</b>로 정한 뒤 <b>한국어 음성 데이터를 설치</b>해 주세요.`);
+    tips.push('그래도 안 되면 <b>크롬</b> 브라우저 최신 버전으로 열어 주세요.');
+    const stTxt = { ok: '✅ 이 기기에는 한국어 목소리가 있어요.', novoice: '⚠️ 이 기기에는 한국어 목소리가 없어요.', none: '⚠️ 이 브라우저는 읽어 주기 기능이 없어요.', unknown: '⚠️ 이 기기에서 읽어 주는 목소리를 찾지 못했어요.' }[st];
+    return `<p class="small">${stTxt}${koVoice ? ` <span class="muted">(${esc(koVoice.name)})</span>` : ''}</p><ol class="plain small tts-tips">${tips.map((t) => `<li>${t}</li>`).join('')}</ol>
+      <p class="small muted">소리가 나지 않아도 학습은 그대로 할 수 있어요. 뜻과 소리를 눈으로 읽고 소리 내어 따라 읽어 보세요.</p>`;
+  }
+  function openTtsHelp() {
+    if (document.querySelector('.tts-pop')) return;
+    const back = document.createElement('div');
+    back.className = 'modal-back center';
+    back.innerHTML = `<div class="modal note-pop tts-pop" role="dialog" aria-modal="true">
+      <div class="np-head">🔇 읽어 주는 소리가 안 들리나요?</div>
+      ${ttsHelpHtml()}
+      <div class="row" style="gap:8px"><button class="btn soft" id="tts-test">🔊 다시 들어 보기</button><button class="btn" id="tts-ok" style="flex:1">알겠어요</button></div>
+    </div>`;
+    const close = () => back.remove();
+    back.addEventListener('click', (e) => { if (e.target === back) close(); });
+    back.querySelector('#tts-ok').addEventListener('click', close);
+    back.querySelector('#tts-test').addEventListener('click', () => speak('가르칠 교, 학교 교'));
+    document.body.appendChild(back);
+  }
+
   let typeTimer = null;
   const TYPE_MS = 100; // 한 글자에 걸리는 시간 (0.1초)
   function typeEasy(step) {
@@ -1398,6 +1477,8 @@
   function bindLearn(step) {
     const c = C(step.idx);
     typeEasy(step);
+    const th = document.getElementById('tts-help');
+    if (th) th.addEventListener('click', openTtsHelp);
     const pairs = hunumPairs(c);
     const texts = pairs.flatMap(([m, s]) => [m, s]);
     $app.querySelectorAll('[data-say]').forEach((b) => b.addEventListener('click', () => {
@@ -2471,6 +2552,10 @@
           <button class="btn ghost">바꾸기</button>
         </form>
         <div class="setting">
+          <div class="txt"><b>읽어 주는 소리 확인</b><div class="small muted">카드를 눌러도 소리가 안 나면 눌러 보세요.</div></div>
+          <button class="btn ghost" id="tts-check">🔊 확인</button>
+        </div>
+        <div class="setting">
           <div class="txt"><b>학습 기록 초기화</b><div class="small muted">${esc(user)}의 배운 한자, 글짓기, 시험 기록이 모두 지워져요.</div></div>
           <button class="btn ghost" id="reset">초기화</button>
         </div>
@@ -2531,6 +2616,7 @@
       document.getElementById('pw0').value = document.getElementById('pw1').value = '';
       fb('비밀번호를 바꿨어요.', true);
     });
+    document.getElementById('tts-check').addEventListener('click', () => { speak('가르칠 교, 학교 교'); openTtsHelp(); });
     document.getElementById('reset').addEventListener('click', () => {
       if (confirm(`정말 ${user}의 모든 학습 기록을 지울까요? 되돌릴 수 없어요.`)) {
         S = blankState();
