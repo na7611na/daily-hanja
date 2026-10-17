@@ -367,8 +367,6 @@
 
   /* ================= 어휘 도우미 ================= */
   const ALL_WORDS = HANJA.flatMap((c) => c.words.map((w, k) => ({ ...w, owner: c.idx, k })));
-  const BY_READ = {};
-  ALL_WORDS.forEach((w) => { (BY_READ[w.read] = BY_READ[w.read] || []).push(w); });
   const plainRead = (w) => w.read.replace(/\s/g, '');
   // 어휘 속 오늘 한자의 자리(몇 번째 글자)와 그 소리
   function targetPos(c, w) {
@@ -433,51 +431,11 @@
     same.concat(pool).forEach((x) => { if (opts.length < 4 && !opts.includes(x.mean)) opts.push(x.mean); });
     return { kind: 'pick', type: 'meaning', idx: i, stage, word: w, options: shuffle(opts), answer: w.mean };
   }
-  // 추론하기: 활용 어휘에 없던 새 어휘 가운데 오늘의 한자가 쓰인 어휘 고르기
-  // 뜻풀이를 두 글자씩 끊어 비교합니다. '하는', '에서'처럼 흔한 조각은 뜻 비교에서 뺍니다.
-  function rawBigrams(s) {
-    const out = new Set();
-    s.split(/[\s·(),]+/).forEach((t) => { for (let j = 0; j < t.length - 1; j++) out.add(t.slice(j, j + 2)); });
-    return out;
-  }
-  const BIGRAM_DF = {};
-  ALL_WORDS.forEach((w) => rawBigrams(w.mean).forEach((b) => { BIGRAM_DF[b] = (BIGRAM_DF[b] || 0) + 1; }));
-  function bigrams(s) {
-    return new Set([...rawBigrams(s)].filter((b) => (BIGRAM_DF[b] || 0) <= 12));
-  }
+  // 어휘 탐정(추론): 활용 어휘에 없던 낯선 어휘를 짧은 글 속에서 만나, 문맥과 아는 한자로 뜻 짐작하기
   function inferQuestion(i) {
     const c = C(i);
-    const sounds = new Set(c.sounds.flatMap((s) => [s, dueum(s)]));
-    const own = new Set(c.words.map((w) => w.read));
-    const ctx = bigrams(c.words.map((w) => w.mean).join(' ') + ' ' + c.meanings.join(' '));
-    // 한글로만 보여 주므로, 같은 읽기의 다른 어휘에 오늘 한자가 쓰였다면 제외합니다. (예: 數 — 산수(山水)는 산수(算數)와 헷갈림)
-    const usesToday = (w) => (BY_READ[w.read] || []).some((x) => x.word.includes(c.h));
-    const [aw, ar, am] = INFER_WORDS[c.h];
-    const answer = { word: aw, read: ar, mean: am };
-    const ok = (w) => !usesToday(w) && !own.has(w.read) && w.read !== answer.read;
-    // 다른 한자의 추론 어휘도 오답 후보로 씁니다. (예: 人 — 인천(仁川))
-    const pool = ALL_WORDS.concat(Object.entries(INFER_WORDS).filter(([h]) => h !== c.h)
-      .map(([h, [word, read, mean]]) => ({ word, read, mean, owner: BY_CHAR[h].idx })));
-    let cands = pool.filter((w) => ok(w) && !w.word.includes(c.h) && [...plainRead(w)].some((ch) => sounds.has(ch)));
-    if (!cands.length && INFER_DISTRACT[c.h]) {
-      const [dw, dr, dm] = INFER_DISTRACT[c.h];
-      const d = { word: dw, read: dr, mean: dm, native: !dw };
-      return { kind: 'infer', idx: i, stage: 'infer', options: shuffle([answer, d]), answer: answer.read, other: d.read, chosen: null };
-    }
-    if (!cands.length) cands = ALL_WORDS.filter((w) => ok(w) && C(w.owner).gradeIdx <= c.gradeIdx);
-    // 오늘 어휘들과 뜻이 겹치지 않는(헷갈리지 않는) 어휘를 고릅니다.
-    // 어휘의 뜻뿐 아니라, 같은 소리 글자가 쓰인 다른 어휘들의 뜻까지 비교합니다. (예: 敎와 校는 둘 다 '선생님'과 관련 있어 제외)
-    const overlap = (text) => { let n = 0; bigrams(text).forEach((b) => { if (ctx.has(b)) n++; }); return n; };
-    const scored = cands.map((w) => {
-      const p = wordParts(w).find((x) => sounds.has(x.s));
-      const rel = p && BY_CHAR[p.ch] ? BY_CHAR[p.ch].words.map((x) => x.mean).join(' ') + ' ' + BY_CHAR[p.ch].meanings.join(' ') : (p ? p.m : '');
-      // 뜻이 겹치지 않는 것이 먼저, 그다음 오늘 급수보다 쉬운(이미 배운) 어휘를 고릅니다.
-      return { w, n: overlap(w.mean) * 2 + overlap(rel) + (C(w.owner).gradeIdx > c.gradeIdx ? 0.5 : 0) };
-    }).sort((a, b) => a.n - b.n);
-    const best = scored.filter((x) => x.n === scored[0].n);
-    const odd = pick(best.length >= 2 ? best : scored.slice(0, 2)).w;
-    // 2지선다: 오늘의 한자가 쓰인 새 어휘(정답) + 소리는 같지만 다른 한자가 쓰인 어휘
-    return { kind: 'infer', idx: i, stage: 'infer', options: shuffle([answer, odd]), answer: answer.read, other: odd.read, chosen: null };
+    const [word, read, parts, text, [ans, ...wrongs]] = INFER_WORDS[c.h];
+    return { kind: 'infer', idx: i, stage: 'infer', word, read, options: shuffle([ans, ...wrongs]), answer: ans, chosen: null, open: [] };
   }
 
   /* ================= 학습 세션 ================= */
@@ -491,7 +449,7 @@
     match: { n: 2, t: '활용 어휘 ①', sub: '뜻 연결하기', e: '🔗', c: 's2' },
     cloze: { n: 3, t: '활용 어휘 ②', sub: '빈칸 채우기', e: '🧩', c: 's3' },
     check: { n: 4, t: '확인하기', e: '✅', c: 's4' },
-    infer: { n: 5, t: '추론하기', e: '🔍', c: 's6' },
+    infer: { n: 5, t: '어휘 탐정(추론)', e: '🔍', c: 's6' },
     write: { n: 6, t: '적용하기', sub: '짧은 글짓기', e: '✏️', c: 's5' },
     week: { n: 0, t: '일주일 복습', e: '⭐', c: 'week' },
     free: { n: 0, t: '자유 복습', e: '🎲', c: 'review' },
@@ -703,7 +661,7 @@
       logActivity({ type: 'lesson', idx: session.plan.newIdx, extra: true, ...quiz });
     } else if (session.type === 'relearn') {
       logActivity({ type: 'relearn', list: S.relearn.slice(), ...quiz });
-      // 완전 학습: 확인하기·추론하기를 틀린 한자는 1~5단계를 한 번 더, 모두 맞혀야 재시험
+      // 완전 학습: 확인하기·어휘 탐정을 틀린 한자는 1~5단계를 한 번 더, 모두 맞혀야 재시험
       S.relearn = S.relearn.filter((x) => (session.failedIdx || []).includes(x));
       if (!S.relearn.length) S.phase = 'exam';
     } else if (session.type === 'oldreview') {
@@ -719,7 +677,7 @@
   function score(ok, i) {
     session.total++;
     if (ok) { session.correct++; removeMissed(i); } else addMissed(i);
-    // 새로 배우는 한자의 확인하기·추론하기를 틀리면 그 한자는 다음 학습일에 다시 배워요.
+    // 새로 배우는 한자의 확인하기·어휘 탐정을 틀리면 그 한자는 다음 학습일에 다시 배워요.
     const st = session.steps[session.i];
     if (!ok && session.plan && i === session.plan.newIdx && (st.kind === 'check' || st.kind === 'infer')) session.failed = true;
     if (!ok && session.type === 'relearn' && (st.kind === 'check' || st.kind === 'infer')) session.failedIdx = [...new Set((session.failedIdx || []).concat([i]))];
@@ -1752,7 +1710,7 @@
   function renderCheck(step) {
     const c = C(step.idx);
     const next = session.steps[session.i + 1] || {};
-    const nextLabel = next.kind === 'check' ? '다음 문제 →' : next.kind === 'infer' ? '추론하기 →' : '다음 →';
+    const nextLabel = next.kind === 'check' ? '다음 문제 →' : next.kind === 'infer' ? '어휘 탐정 →' : '다음 →';
     return `<div class="card lesson-card">${stageHtml(step.stage)}
       ${step.old ? `<p class="small muted center">${c.gradeName}에서 공부한 한자예요</p>` : step.stage === 'review' ? '<p class="small muted center">어제 배운 한자예요</p>' : step.stage === 'missed' ? '<p class="small muted center">전에 틀렸던 한자예요</p>' : ''}
       ${wordQuestionHtml(c, step.word, step.graded ? stampHtml(step.ok) : '')}
@@ -1981,24 +1939,44 @@
     });
   }
 
-  // 5. 추론하기 — 처음 보는 어휘 2개 가운데 오늘의 한자가 쓰인 어휘 고르기 (보기는 한글만, 바로 채점, 맞아도 틀려도 해설)
+  // 5. 어휘 탐정(추론) — 짧은 글 속 낯선 어휘의 뜻을 추론 근거(문맥, 아는 한자)로 짐작해 3개 가운데 고르기
+  const inferParts = (c) => INFER_WORDS[c.h][2].split('/').map((x) => { const [ch, ...r] = x.split(' '); return { ch, s: r.pop(), m: r.join(' ') }; });
   function renderInfer(step) {
+    // 예전 방식(어휘 2개 가운데 고르기)으로 저장된 진행 중 단계는 새 문제로 바꿔요. 이미 답했다면 그 결과를 이어받아요.
+    if (!step.word) {
+      const was = step.chosen === null ? null : step.chosen === step.answer;
+      Object.assign(step, inferQuestion(step.idx));
+      if (was !== null) step.chosen = was ? step.answer : step.options.find((o) => o !== step.answer);
+    }
     const c = C(step.idx);
+    const [, , , text, , clue1, clue2] = INFER_WORDS[c.h];
     const answered = step.chosen !== null;
-    const opts = step.options.map((w, k) => {
+    const label = `${step.read}(${step.word})`;
+    const passage = esc(text).replace(step.read, `<b class="inf-word">${step.read}</b>`);
+    const open = (k) => answered || step.open.includes(k);
+    const chars = `<div class="wchars">${inferParts(c).map((p) => `<span class="wc${p.ch === c.h ? ' on' : ''}"><b class="hanja">${p.ch}</b><small>${p.m} <strong>${p.s}</strong></small></span>`).join('')}</div>`;
+    const clue = (k, title, body) => `<button class="btn ghost block clue-btn${open(k) ? ' on' : ''}" data-clue="${k}" ${answered ? 'disabled' : ''} aria-expanded="${open(k)}">🔎 추론 근거${k}: ${title}</button>
+      ${open(k) ? `<div class="clue-box">${body}</div>` : ''}`;
+    const opts = step.options.map((o, k) => {
       let cls = '';
-      if (answered && w.read === step.answer) cls = ' correct';
-      else if (answered && w.read === step.chosen) cls = ' wrong';
-      return `<button class="opt big-opt${cls}" data-k="${k}" ${answered ? 'disabled' : ''}><span class="opt-n">${k + 1}</span>${w.read}</button>`;
+      if (answered && o === step.answer) cls = ' correct';
+      else if (answered && o === step.chosen) cls = ' wrong';
+      return `<button class="opt inf-opt${cls}" data-k="${k}" ${answered ? 'disabled' : ''}><span class="opt-n">${k + 1}</span>${o}</button>`;
     }).join('');
     return `<div class="card lesson-card">${stageHtml('infer')}
-      <div class="quiz-q${answered ? ' graded' : ''}">${answered ? stampHtml(step.chosen === step.answer) : ''}
-        <div class="today-chip"><span class="hanja">${c.h}</span> ${hunum(c)}</div>
-        <div class="prompt">오늘의 한자 <b>'${hunum(c)}'</b>${josa(hunum(c), '이')} <b class="pos">쓰인</b> 어휘는 무엇일까요?</div>
-        <div class="qhint">단어의 뜻을 생각해 보며 짐작해 보세요!</div>
+      <div class="inf-head"><span class="inf-tag">오늘의 어휘 탐정</span><span class="today-chip"><span class="hanja">${c.h}</span> ${hunum(c)}</span></div>
+      <h3 class="inf-title">${label}</h3>
+      <div class="inf-text">${passage}</div>
+      <div class="clues">
+        ${clue(1, '문맥에서 단서 찾기', esc(clue1))}
+        ${clue(2, '알고 있는 한자 활용하기', `${chars}<p>${esc(clue2)}</p>`)}
       </div>
-      <div class="options two">${opts}</div>
-      <div id="fb">${answered ? inferFeedback(step) : ''}</div>
+      <div class="quiz-q inf-q${answered ? ' graded' : ''}">${answered ? stampHtml(step.chosen === step.answer) : ''}
+        <div class="prompt">미션. <b>'${label}'</b>${josa(step.read, '은')} 무슨 뜻일까요?</div>
+      </div>
+      <div class="options">${opts}</div>
+      <div id="fb">${answered ? `<div class="explain"><div class="answer">${step.chosen === step.answer ? '⭕ 잘 추론했어요!' : `정답 <b>${step.answer}</b>`}</div>
+        <p class="inf-sum"><b>${label}</b> : ${step.answer}</p></div>` : ''}</div>
       ${answered ? `<button class="btn block big" id="next" ${waitLeft(step) ? 'disabled' : ''}>${waitLeft(step) ? `해설을 읽어 봐요 (<span id="wait">${waitLeft(step)}</span>)` : inferNextLabel()}</button>` : ''}
     </div>`;
   }
@@ -2006,33 +1984,6 @@
   // 해설을 읽도록 '다음' 버튼은 몇 초 뒤에 눌러져요
   const READ_WAIT = 5;
   const waitLeft = (step) => (step.readyAt ? Math.max(0, Math.ceil((step.readyAt - Date.now()) / 1000)) : 0);
-  // 해설: 두 보기를 나란히 놓고, 오늘 한자의 음훈은 초록, 소리만 같은 다른 한자(또는 우리말)는 빨강으로 표시해요.
-  function inferFeedback(step) {
-    const c = C(step.idx);
-    const ans = step.options.find((w) => w.read === step.answer);
-    const oth = step.options.find((w) => w.read === step.other);
-    const sounds = new Set(c.sounds.flatMap((s) => [s, dueum(s)]));
-    const own = wordParts(ans).find((p) => p.ch === c.h);
-    const look = oth.native ? null : wordParts(oth).find((p) => sounds.has(p.s));
-    const ok = step.chosen === step.answer;
-    const card = (w, good) => {
-      const chars = w.native
-        ? `<div class="ic-native"><span class="tag-red">우리말(고유어)</span><small>한자가 아니에요</small></div>`
-        : `<div class="wchars">${wordParts(w).map((p) => {
-          const cls = good && p.ch === c.h ? ' good blink' : !good && look && p.ch === look.ch ? ' bad blink' : '';
-          return `<span class="wc${cls}"><b class="hanja">${p.ch}</b><small>${p.m} <strong>${p.s}</strong></small></span>`;
-        }).join('')}</div>`;
-      return `<div class="icard ${good ? 'ok' : 'no'}${w.read === step.chosen ? ' picked' : ''}">
-        <div class="ic-top">${good ? '⭕ 오늘의 한자' : '✕ 소리만 같아요'}${w.read === step.chosen ? '<span class="mine">내가 고름</span>' : ''}</div>
-        <div class="ic-word">${w.read}</div>
-        ${chars}
-        <div class="ic-mean">${w.mean}</div>
-      </div>`;
-    };
-    // 보기와 같은 순서로 놓아요
-    return `${ok ? '' : `<div class="explain"><div class="answer">정답 <b>${ans.read}</b></div></div>`}
-      <div class="icards">${step.options.map((w) => card(w, w.read === step.answer)).join('')}</div>`;
-  }
   function bindInfer(step) {
     if (step.chosen !== null) {
       bindNext();
@@ -2050,8 +2001,14 @@
       }
       return;
     }
-    $app.querySelectorAll('.big-opt').forEach((b) => b.addEventListener('click', () => {
-      step.chosen = step.options[+b.dataset.k].read;
+    $app.querySelectorAll('[data-clue]').forEach((b) => b.addEventListener('click', () => {
+      const k = +b.dataset.clue;
+      step.open = step.open.includes(k) ? step.open.filter((x) => x !== k) : step.open.concat([k]);
+      save();
+      renderStep();
+    }));
+    $app.querySelectorAll('.inf-opt').forEach((b) => b.addEventListener('click', () => {
+      step.chosen = step.options[+b.dataset.k];
       step.readyAt = Date.now() + READ_WAIT * 1000;
       const ok = step.chosen === step.answer;
       score(ok, step.idx);
@@ -2157,7 +2114,7 @@
     } else if (learnedNew && nextNewIdx() !== null) {
       action = `<button class="btn ghost block" id="more" style="margin-top:12px">➕ 한 자 더 배우기 (남은 한자 ${queueLeft()}자)</button>`;
     }
-    // 확인하기·추론하기에서 틀리면 다음 학습일에 다시 배워요 (완전 학습).
+    // 확인하기·어휘 탐정에서 틀리면 다음 학습일에 다시 배워요 (완전 학습).
     let redoNote = '';
     if (learnedNew && session.failed) {
       const rc = C(session.plan.newIdx);
@@ -2611,7 +2568,7 @@
         <ul class="plain small meta-tips">
           <li><b>모르면 솔직하게 '몰라요'</b> — 레벨테스트에서 찍지 않아야 내가 모르는 한자만 골라 공부할 수 있어요.</li>
           <li><b>먼저 떠올리고 확인해요</b> — 급수 한자에서 '뜻·음 가리고 스스로 떠올리기'를 켜고, 떠올린 뒤에 눌러 확인해요.</li>
-          <li><b>틀린 까닭을 읽어요</b> — 확인하기·추론하기 해설에서 왜 틀렸는지 알면 같은 실수를 하지 않아요.</li>
+          <li><b>틀린 까닭을 읽어요</b> — 확인하기·어휘 탐정 해설에서 왜 틀렸는지 알면 같은 실수를 하지 않아요.</li>
           <li><b>소리 내어 말해 봐요</b> — 뜻과 소리를 소리 내어 읽고, 배운 낱말로 글을 지어 보면 진짜 아는지 알 수 있어요.</li>
           <li><b>천천히 생각해요</b> — 빨리 누르는 것보다 한 번 더 생각하는 것이 더 많이 배우는 길이에요.</li>
         </ul>
@@ -2625,7 +2582,7 @@
           <li><b>② 활용 어휘 ①</b> — 한자 아래 음훈을 힌트로 어휘와 뜻을 선으로 연결해요.</li>
           <li><b>③ 활용 어휘 ②</b> — 문장의 빈칸에 알맞은 활용 어휘를 넣어요.</li>
           <li><b>④ 확인하기</b> — 한글 어휘에 쓰인 오늘 한자의 뜻과 음을 써요.</li>
-          <li><b>⑤ 추론하기</b> — 처음 보는 어휘 2개 가운데 오늘의 한자가 쓰인 어휘를 음훈으로 짐작해 골라요.</li>
+          <li><b>⑤ 어휘 탐정(추론)</b> — 짧은 글 속 처음 보는 어휘의 뜻을 '문맥에서 단서 찾기'와 '알고 있는 한자 활용하기'로 추론해 골라요.</li>
           <li><b>⑥ 적용하기</b> — 배운 낱말을 넣어 짧은 글을 지어요.</li>
           <li><b>1일 후 복습</b> — 다음 학습일 아침에 바로 전 한자를 퀴즈로 떠올려요. (금요일 한자는 월요일에)</li>
           <li><b>일주일 복습</b> — 금요일마다 그 주의 한자 5자를 모두 다시 풀어요.</li>

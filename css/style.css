@@ -927,3 +927,23 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .mbox.decoy.left-over { opacity: .55; border-style: dashed; box-shadow: none; cursor: default; }
 .decoy-note { display: block; margin-top: 2px; font-size: 11px; color: var(--ink-soft); }
 .decoy-tip { color: var(--accent-dark); font-weight: 700; white-space: nowrap; }
+
+/* 5단계 어휘 탐정(추론) */
+.inf-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.inf-tag { padding: 4px 12px; border-radius: 999px; background: var(--s6-soft); color: var(--s6); font-size: 14px; font-weight: 700; }
+.inf-head .today-chip { padding: 3px 12px; font-size: 14px; }
+.inf-head .today-chip .hanja { font-size: 18px; }
+.lesson-card .inf-title { font-family: var(--fun); font-size: 30px; font-weight: 400; margin: 10px 0 8px; }
+.inf-text { padding: 14px 16px; border-radius: 14px; background: var(--bg); font-size: 18px; line-height: 1.75; }
+.inf-word { color: var(--s6); text-decoration: underline; text-underline-offset: 4px; }
+.clues { display: grid; gap: 8px; margin: 12px 0 4px; }
+.btn.clue-btn { display: block; text-align: center; font-size: 16px; padding: 10px 12px; border-color: var(--s6); color: var(--s6); box-shadow: 0 4px 0 var(--s6-soft); }
+.btn.clue-btn.on { background: var(--s6-soft); }
+.btn.clue-btn[disabled] { opacity: 1; cursor: default; }
+.clue-box { padding: 12px 14px; border-radius: 14px; background: var(--s6-soft); font-size: 16px; line-height: 1.65; }
+.clue-box .wchars { justify-content: center; margin-bottom: 6px; }
+.clue-box p { margin: 0; }
+.inf-q { margin-top: 12px; }
+.inf-q .prompt { font-size: 19px; }
+.opt.inf-opt { display: flex; align-items: center; gap: 12px; text-align: left; font-size: 18px; }
+.inf-sum { margin: 0; font-size: 17px; }
