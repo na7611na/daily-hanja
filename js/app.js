@@ -1940,7 +1940,7 @@
     });
   }
 
-  // 5. 어휘 탐정(추론) — 짧은 글 속 낯선 어휘의 뜻을 추론 근거(문맥, 아는 한자)로 짐작해 3개 가운데 고르기
+  // 5. 어휘 탐정(추론) — 짧은 글 속 낯선 어휘의 뜻을 추론 방법(문맥, 아는 한자)로 짐작해 3개 가운데 고르기
   const inferParts = (c) => INFER_WORDS[c.h][2].split('/').map((x) => { const [ch, ...r] = x.split(' '); return { ch, s: r.pop(), m: r.join(' ') }; });
   function renderInfer(step) {
     // 예전 방식(어휘 2개 가운데 고르기)으로 저장된 진행 중 단계는 새 문제로 바꿔요. 이미 답했다면 그 결과를 이어받아요.
@@ -1956,7 +1956,7 @@
     const passage = esc(text).replace(step.read, `<b class="inf-word">${step.read}</b>`);
     const open = (k) => answered || step.open.includes(k);
     const chars = `<div class="wchars">${inferParts(c).map((p) => `<span class="wc${p.ch === c.h ? ' on' : ''}"><b class="hanja">${p.ch}</b><small>${p.m} <strong>${p.s}</strong></small></span>`).join('')}</div>`;
-    const clue = (k, title, body) => `<button class="btn ghost block clue-btn${open(k) ? ' on' : ''}" data-clue="${k}" ${answered ? 'disabled' : ''} aria-expanded="${open(k)}">🔎 추론 근거${k}: ${title}</button>
+    const clue = (k, title, body) => `<button class="btn ghost block clue-btn${open(k) ? ' on' : ''}" data-clue="${k}" ${answered ? 'disabled' : ''} aria-expanded="${open(k)}">🔎 추론 방법${k}: ${title}</button>
       ${open(k) ? `<div class="clue-box">${body}</div>` : ''}`;
     const opts = step.options.map((o, k) => {
       let cls = '';
@@ -2892,13 +2892,13 @@
           </table></div>`).join('')}
       </div>`;
     } else if (teacherTab === 'infer') {
-      // 5단계 어휘 탐정(추론) 문항 검토: 낯선 어휘, 짧은 글, 보기(정답 먼저), 추론 근거 2개
+      // 5단계 어휘 탐정(추론) 문항 검토: 낯선 어휘, 짧은 글, 보기(정답 먼저), 추론 방법 2개
       const byGrade = GRADES.map((g, k) => ({ g, k, list: HANJA.slice(g.start, g.end).filter((c) => INFER_WORDS[c.h]) })).filter((x) => x.list.length);
       if (!byGrade.some((x) => x.k === inferGrade)) inferGrade = byGrade.length ? byGrade[0].k : 0;
       const g = byGrade.find((x) => x.k === inferGrade);
       body = `<div class="card">
         <h3 style="margin-top:0">🔍 어휘 탐정 <span class="small muted">${Object.keys(INFER_WORDS).length}문항</span></h3>
-        <p class="small muted" style="margin-top:0">5단계 '어휘 탐정(추론)'에 나오는 문항이에요. 한자마다 활용 어휘에 없는 낯선 어휘 1개가 짧은 글 속에 나오고, 학생은 추론 근거를 열어 보며 뜻을 3개 가운데에서 골라요. 앱에서는 보기 순서가 섞여서 나와요.</p>
+        <p class="small muted" style="margin-top:0">5단계 '어휘 탐정(추론)'에 나오는 문항이에요. 한자마다 활용 어휘에 없는 낯선 어휘 1개가 짧은 글 속에 나오고, 학생은 추론 방법을 열어 보며 뜻을 3개 가운데에서 골라요. 앱에서는 보기 순서가 섞여서 나와요.</p>
         <div class="tabs grade-tabs easy-tabs" style="--n:${byGrade.length}">${byGrade.map(({ g: gg, k, list }) => `<button class="${k === inferGrade ? 'on' : ''}" data-ig="${k}">${gg.name}<small>${list.length}자</small></button>`).join('')}</div>
         <div class="inf-list">${g ? g.list.map((c) => {
           const [word, read, parts, text, opts, k1, k2] = INFER_WORDS[c.h];
@@ -2907,8 +2907,8 @@
             <div class="small muted">활용 어휘: ${c.words.map((w) => w.read).join(', ')}</div>
             <div class="inf-text">${esc(text).replace(read, `<b class="inf-word">${read}</b>`)}</div>
             <ul class="ii-opts">${opts.map((o, k) => `<li class="${k ? 'x' : 'ok'}">${k ? '오답' : '정답'} · ${esc(o)}</li>`).join('')}</ul>
-            <div class="ii-clue"><b>근거1 문맥</b> ${esc(k1)}</div>
-            <div class="ii-clue"><b>근거2 한자</b> ${esc(k2)} <span class="muted">(${esc(parts.split('/').join(' · '))})</span></div>
+            <div class="ii-clue"><b>방법1 문맥</b> ${esc(k1)}</div>
+            <div class="ii-clue"><b>방법2 한자</b> ${esc(k2)} <span class="muted">(${esc(parts.split('/').join(' · '))})</span></div>
           </div>`;
         }).join('') : ''}</div>
       </div>`;
