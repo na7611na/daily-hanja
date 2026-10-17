@@ -557,6 +557,18 @@
     steps.push({ kind: 'done' });
     return { type: 'oldreview', steps, i: 0, correct: 0, total: 0, started: Date.now() };
   }
+  // 2단계 함정 뜻: 오늘 어휘 4개 어느 것과도 짝이 아닌 뜻 1개 (되도록 같은 소리의 다른 한자가 쓰인 어휘의 뜻)
+  function matchDecoy(i) {
+    const c = C(i);
+    const means = new Set(c.words.map((w) => w.mean));
+    const sounds = new Set(c.sounds.flatMap((x) => [x, dueum(x)]));
+    const okW = (w) => !w.word.includes(c.h) && !means.has(w.mean) && w.mean.length <= 22;
+    const same = ALL_WORDS.filter((w) => okW(w) && [...plainRead(w)].some((ch) => sounds.has(ch)));
+    const pool = same.length ? same : ALL_WORDS.filter((w) => okW(w) && C(w.owner).gradeIdx === c.gradeIdx);
+    const w = pick(pool.length ? pool : ALL_WORDS.filter(okW));
+    return { mean: w.mean, read: w.read, word: w.word };
+  }
+  const matchStep = (i) => ({ kind: 'match', idx: i, stage: 'match', order: shuffle(C(i).words.map((_, k) => k).concat([-1])), decoy: matchDecoy(i), done: [], selL: null, selR: null });
   // 어제 배운 한자·틀렸던 한자 복습: 4단계 확인하기처럼 어휘 속 글자의 뜻과 음 쓰기
   const reviewCheck = (i, stage) => ({ kind: 'check', idx: i, stage, word: pick(C(i).words), m: '', s: '', graded: false });
   function newCharSteps(i) {
@@ -564,7 +576,7 @@
     const order = shuffle(c.words.map((_, k) => k));
     return [
       { kind: 'learn', idx: i, stage: 'learn' },
-      { kind: 'match', idx: i, stage: 'match', order: shuffle(c.words.map((_, k) => k)), done: [], selL: null, selR: null },
+      matchStep(i),
       { kind: 'cloze', idx: i, stage: 'cloze', order, filled: [], cur: order[0] },
       { kind: 'check', idx: i, stage: 'check', word: pick(c.words), m: '', s: '', graded: false },
       inferQuestion(i),
@@ -604,7 +616,7 @@
     S.relearn.forEach((i) => {
       const c = C(i);
       steps.push({ kind: 'learn', idx: i, stage: 'learn' });
-      steps.push({ kind: 'match', idx: i, stage: 'match', order: shuffle(c.words.map((_, k) => k)), done: [], selL: null, selR: null });
+      steps.push(matchStep(i));
       const order = shuffle(c.words.map((_, k) => k));
       steps.push({ kind: 'cloze', idx: i, stage: 'cloze', order, filled: [], cur: order[0] });
       steps.push({ kind: 'check', idx: i, stage: 'check', word: pick(c.words), m: '', s: '', graded: false });
@@ -1567,14 +1579,19 @@
       return `<button class="mbox ml${ok ? ' ok' : ''}${step.selL === k ? ' sel' : ''}${step.reading === k ? ' reading' : ''}" data-w="${k}" ${ok ? 'disabled' : ''}>
         ${wordCharsHtml(w, c.h).replace('class="wchars"', `class="wchars one-line n${[...w.word].length}"`)}<span class="dot"></span></button>`;
     }).join('');
-    const right = step.order.map((k) => {
+    const right = step.order.filter((k) => k >= 0 || step.decoy).map((k) => {
+      if (k < 0) {
+        // 함정 뜻: 다 이으면 '짝이 없는 뜻'으로 흐리게 남아요
+        return `<button class="mbox mr decoy${all ? ' left-over' : ''}${step.selR === k ? ' sel' : ''}" data-m="-1" ${all ? 'disabled' : ''}>
+          <span class="dot"></span><span class="mtext">${step.decoy.mean}${all ? `<small class="decoy-note">짝이 없는 뜻이에요 (${esc(step.decoy.read)})</small>` : ''}</span></button>`;
+      }
       const ok = step.done.includes(k);
       return `<button class="mbox mr${ok ? ' ok' : ''}${step.selR === k ? ' sel' : ''}" data-m="${k}" ${ok ? 'disabled' : ''}>
         <span class="dot"></span><span class="mtext">${c.words[k].mean}</span></button>`;
     }).join('');
     return `<div class="card lesson-card">${stageHtml('match')}
       <p class="guide">${all ? '🎉 모두 연결했어요!'
-        : '<b>어휘 카드</b>를 눌러 글자마다 <b>뜻과 소리</b>를 들은 뒤, 알맞은 <b>뜻</b>을 눌러 <b>선으로 연결</b>해요.'}</p>
+        : `<b>어휘 카드</b>를 눌러 글자마다 <b>뜻과 소리</b>를 들은 뒤, 알맞은 <b>뜻</b>을 눌러 <b>선으로 연결</b>해요.${step.decoy ? ' <span class="decoy-tip">뜻 하나는 짝이 없어요!</span>' : ''}`}</p>
       <div class="mboard" id="mboard">
         <div class="mcol">${left}</div>
         <div class="mcol">${right}</div>

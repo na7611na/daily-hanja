@@ -923,3 +923,7 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .acc-list li { margin: 6px 0; }
 .acc-list li.undone { opacity: .6; }
 .acc-list .small-btn { margin-left: 6px; }
+/* 2단계 함정 뜻 */
+.mbox.decoy.left-over { opacity: .55; border-style: dashed; box-shadow: none; cursor: default; }
+.decoy-note { display: block; margin-top: 2px; font-size: 11px; color: var(--ink-soft); }
+.decoy-tip { color: var(--accent-dark); font-weight: 700; white-space: nowrap; }
