@@ -2716,6 +2716,7 @@
   let teacherOpen = null;
   let teacherTab = 'status';
   let easyGrade = 0; // 옛말 풀이 탭에서 보고 있는 급수
+  let inferGrade = 0; // 어휘 탐정 탭에서 보고 있는 급수
   // 선생님 메뉴: 이름 앞의 학년·반(예: '5-4 ', '5학년 4반 3번 ')은 빼고 보여 줘요
   const shortName = (n) => {
     const t = String(n).replace(/^\s*\d+\s*(?:학년|헉년|-|\.)?\s*\d*\s*반?\s*(?:\d+\s*번)?\s*/, '');
@@ -2855,7 +2856,7 @@
         <td>${todaySecs(st) ? fmtTime(todaySecs(st)) : '-'}</td><td>${fmtTime(totalSecs(st))}</td>
         <td>${last ? shortDate(last) : '-'}</td></tr>${detail}`;
     }).join('');
-    const TABS = [['status', '학습 현황'], ['rank', '랭킹'], ['easy', '옛말 풀이'], ['cert', '합격증'], ['settings', '설정']];
+    const TABS = [['status', '학습 현황'], ['rank', '랭킹'], ['easy', '옛말 풀이'], ['infer', '어휘 탐정'], ['cert', '합격증'], ['settings', '설정']];
     let body = '';
     if (teacherTab === 'status') {
       body = `<div class="card">
@@ -2888,6 +2889,27 @@
             <tr><th>한자</th><th>훈 음</th><th>풀이 · 예문</th></tr>
             ${list.map((c) => `<tr><td class="hanja">${c.h}</td><td>${hunum(c)}</td><td>${mark(EASY_MEANINGS[c.h])}${easyExample(c) ? `<div class="ex">📖 ${easyExample(c)}</div>` : '<div class="ex muted">📖 예문 없음</div>'}</td></tr>`).join('')}
           </table></div>`).join('')}
+      </div>`;
+    } else if (teacherTab === 'infer') {
+      // 5단계 어휘 탐정(추론) 문항 검토: 낯선 어휘, 짧은 글, 보기(정답 먼저), 추론 근거 2개
+      const byGrade = GRADES.map((g, k) => ({ g, k, list: HANJA.slice(g.start, g.end).filter((c) => INFER_WORDS[c.h]) })).filter((x) => x.list.length);
+      if (!byGrade.some((x) => x.k === inferGrade)) inferGrade = byGrade.length ? byGrade[0].k : 0;
+      const g = byGrade.find((x) => x.k === inferGrade);
+      body = `<div class="card">
+        <h3 style="margin-top:0">🔍 어휘 탐정 <span class="small muted">${Object.keys(INFER_WORDS).length}문항</span></h3>
+        <p class="small muted" style="margin-top:0">5단계 '어휘 탐정(추론)'에 나오는 문항이에요. 한자마다 활용 어휘에 없는 낯선 어휘 1개가 짧은 글 속에 나오고, 학생은 추론 근거를 열어 보며 뜻을 3개 가운데에서 골라요. 앱에서는 보기 순서가 섞여서 나와요.</p>
+        <div class="tabs grade-tabs easy-tabs" style="--n:${byGrade.length}">${byGrade.map(({ g: gg, k, list }) => `<button class="${k === inferGrade ? 'on' : ''}" data-ig="${k}">${gg.name}<small>${list.length}자</small></button>`).join('')}</div>
+        <div class="inf-list">${g ? g.list.map((c) => {
+          const [word, read, parts, text, opts, k1, k2] = INFER_WORDS[c.h];
+          return `<div class="inf-item">
+            <div class="ii-top"><span class="hanja">${c.h}</span><span class="small muted">${hunum(c)}</span><b class="ii-word">${read} <span class="hanja">${word}</span></b></div>
+            <div class="small muted">활용 어휘: ${c.words.map((w) => w.read).join(', ')}</div>
+            <div class="inf-text">${esc(text).replace(read, `<b class="inf-word">${read}</b>`)}</div>
+            <ul class="ii-opts">${opts.map((o, k) => `<li class="${k ? 'x' : 'ok'}">${k ? '오답' : '정답'} · ${esc(o)}</li>`).join('')}</ul>
+            <div class="ii-clue"><b>근거1 문맥</b> ${esc(k1)}</div>
+            <div class="ii-clue"><b>근거2 한자</b> ${esc(k2)} <span class="muted">(${esc(parts.split('/').join(' · '))})</span></div>
+          </div>`;
+        }).join('') : ''}</div>
       </div>`;
     } else if (teacherTab === 'cert') {
       const items = list.map((n) => {
@@ -2940,6 +2962,7 @@
       ${body}`;
     $app.querySelectorAll('[data-ttab]').forEach((b) => b.addEventListener('click', () => { teacherTab = b.dataset.ttab; renderTeacher(); }));
     $app.querySelectorAll('[data-eg]').forEach((b) => b.addEventListener('click', () => { easyGrade = +b.dataset.eg; renderTeacher(); }));
+    $app.querySelectorAll('[data-ig]').forEach((b) => b.addEventListener('click', () => { inferGrade = +b.dataset.ig; renderTeacher(); }));
     $app.querySelectorAll('[data-open-st]').forEach((b) => b.addEventListener('click', () => {
       teacherOpen = teacherOpen === b.dataset.openSt ? null : b.dataset.openSt;
       renderTeacher();
