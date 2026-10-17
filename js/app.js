@@ -867,7 +867,7 @@
         <div class="seg"><button class="${isNew ? '' : 'on'}" data-mode="in">입장하기</button><button class="${isNew ? 'on' : ''}" data-mode="new">처음 왔어요</button></div>
         <form id="login" autocomplete="off">
           <label for="name">이름(아이디)</label>
-          <input id="name" class="text-input" maxlength="20" placeholder="예) 3학년 2반 김하늘" required>
+          <input id="name" class="text-input" maxlength="20" placeholder="예) 54 이순신" required>
           <label for="pw">비밀번호${isNew ? ' 만들기 (4글자 이상)' : ''}</label>
           <input id="pw" type="password" class="text-input" maxlength="30" required autocomplete="off">
           ${isNew ? `<label for="pw2">비밀번호 한 번 더</label>
