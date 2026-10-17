@@ -1766,9 +1766,11 @@
   }
 
   // 5. 적용하기 — 짧은 글짓기
+  // 글짓기에 넣을 낱말: 5단계 어휘 탐정에서 만난 어휘
+  const writeWords = (c) => { const x = INFER_WORDS[c.h]; return [{ word: x[0], read: x[1], mean: x[4][0] }]; };
   function usedWord(c, text) {
     const t = text.replace(/\s/g, '');
-    return c.words.find((w) => t.includes(plainRead(w)) || t.includes(w.word)) || null;
+    return writeWords(c).find((w) => t.includes(plainRead(w)) || t.includes(w.word)) || null;
   }
   /* ---------- 글짓기 첨삭: 정해진 규칙으로 바로 고쳐 줘요 ---------- */
   // 자주 틀리는 낱말 [틀린 말, 바른 말]
@@ -1794,7 +1796,7 @@
       while (i >= 0) { add(i, bad.length, good, `'${bad}'${josa(bad, '은')} <b>'${good}'</b>${josa(good, '이')} 바른 말이에요.`); i = text.indexOf(bad, i + bad.length); }
     });
     // 2. 배운 낱말: 알맞은 조사, 조사는 붙여 쓰고 그 뒤는 띄어 쓰기
-    c.words.forEach((w) => {
+    writeWords(c).forEach((w) => {
       const word = plainRead(w);
       const jong = jongOf(word.slice(-1));
       let i = text.indexOf(word);
@@ -1850,17 +1852,16 @@
     html += esc(text.slice(k));
     const hints = [];
     if (text.length >= 12 && !/\s/.test(text)) hints.push('낱말과 낱말 사이를 <b>띄어 써</b> 보세요.');
-    const used = c.words.filter((w) => text.replace(/\s/g, '').includes(plainRead(w)));
+    const used = writeWords(c).filter((w) => text.replace(/\s/g, '').includes(plainRead(w)));
     const good = [];
-    if (used.length > 1) good.push(`배운 낱말을 <b>${used.length}개</b>나 넣었어요! (${used.map((w) => w.read).join(', ')})`);
-    else if (used.length) good.push(`배운 낱말 <b>'${used[0].read}'</b>${josa(used[0].read, '을')} 넣어 썼어요.`);
+    if (used.length) good.push(`어휘 탐정에서 만난 <b>'${used[0].read}'</b>${josa(used[0].read, '을')} 넣어 썼어요.`);
     if (text.length >= 25) good.push('자세하게 잘 썼어요.');
     return { fixes: list, fixed, html, hints, good, used };
   }
   function proofHtml(c, text) {
     const r = proofread(c, text);
     const whys = [...new Set(r.fixes.map((f) => f.why))];
-    const w = r.used[0] || c.words[0];
+    const w = r.used[0] || writeWords(c)[0];
     return `<div class="proof">
       <div class="pf-title">✏️ 첨삭</div>
       ${r.good.map((g) => `<div class="pf-good">👍 ${g}</div>`).join('')}
@@ -1873,11 +1874,11 @@
   }
   function renderWrite(step) {
     const c = C(step.idx);
-    const chips = c.words.map((w) => `<button type="button" class="chip" data-read="${w.read}"><b>${w.read}</b><small>${w.mean}</small></button>`).join('');
+    const chips = writeWords(c).map((w) => `<button type="button" class="chip" data-read="${w.read}"><b>${w.read}</b><small>${w.mean}</small></button>`).join('');
     return `<div class="card lesson-card">${stageHtml('write')}
-      <p class="guide">오늘 배운 낱말을 <b>하나 이상</b> 넣어 짧은 글을 지어 보세요. 낱말을 누르면 글에 들어가요.</p>
+      <p class="guide">5단계 어휘 탐정에서 만난 낱말을 넣어 짧은 글을 지어 보세요. 낱말을 누르면 글에 들어가요.</p>
       <div class="chips">${chips}</div>
-      <textarea id="text" class="text-input" rows="3" maxlength="200" placeholder="예) ${esc(c.ex.replace(/\([^)]*\)/, ''))}">${esc(step.text)}</textarea>
+      <textarea id="text" class="text-input" rows="3" maxlength="200" placeholder="'${writeWords(c)[0].read}'${josa(writeWords(c)[0].read, '을')} 넣어 내 생활 이야기로 써 보세요.">${esc(step.text)}</textarea>
       <div id="fb">${step.checked && step.checked === step.text ? proofHtml(c, step.text.trim()) : ''}</div>
       <button class="btn block big" id="save">${step.checked && step.checked === step.text ? '글 저장하고 다음 →' : '다 썼어요! 첨삭 받기'}</button>
     </div>`;
@@ -1918,7 +1919,7 @@
       }
       const w = usedWord(c, text);
       if (!w) {
-        fb.innerHTML = `<div class="feedback no">배운 낱말(${c.words.map((x) => x.read).join(', ')}) 가운데 하나를 넣어 써 보세요.</div>`;
+        fb.innerHTML = `<div class="feedback no">어휘 탐정에서 만난 낱말 '${writeWords(c)[0].read}'${josa(writeWords(c)[0].read, '을')} 넣어 써 보세요.</div>`;
         return;
       }
       if (step.checked !== ta.value) {
@@ -2583,7 +2584,7 @@
           <li><b>③ 활용 어휘 ②</b> — 문장의 빈칸에 알맞은 활용 어휘를 넣어요.</li>
           <li><b>④ 확인하기</b> — 한글 어휘에 쓰인 오늘 한자의 뜻과 음을 써요.</li>
           <li><b>⑤ 어휘 탐정(추론)</b> — 짧은 글 속 처음 보는 어휘의 뜻을 '문맥에서 단서 찾기'와 '알고 있는 한자 활용하기'로 추론해 골라요.</li>
-          <li><b>⑥ 적용하기</b> — 배운 낱말을 넣어 짧은 글을 지어요.</li>
+          <li><b>⑥ 적용하기</b> — 어휘 탐정에서 만난 낱말을 넣어 짧은 글을 지어요.</li>
           <li><b>1일 후 복습</b> — 다음 학습일 아침에 바로 전 한자를 퀴즈로 떠올려요. (금요일 한자는 월요일에)</li>
           <li><b>일주일 복습</b> — 금요일마다 그 주의 한자 5자를 모두 다시 풀어요.</li>
           <li><b>틀린 한자</b> — 틀리면 '다시 볼 한자'로 모아 매일 복습에 최대 ${MAX_EXTRA_REVIEW}자씩 다시 나와요.</li>
