@@ -920,3 +920,6 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .tts-link .linkbtn { color: var(--ink-soft); font-size: 13px; }
 .tts-tips li { margin: 6px 0; line-height: 1.5; }
 .tts-pop { text-align: left; }
+.acc-list li { margin: 6px 0; }
+.acc-list li.undone { opacity: .6; }
+.acc-list .small-btn { margin-left: 6px; }

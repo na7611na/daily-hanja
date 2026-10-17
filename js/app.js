@@ -2234,7 +2234,7 @@
       if (a.type === 'review') return `🔁 자유 복습 · 퀴즈 ${a.correct}/${a.total}`;
       if (a.type === 'oldreview') return `🔁 입장 복습(지난 급수·어제 배운 한자) · ${a.correct}/${a.total}`;
       if (a.type === 'exam') return `🏆 ${a.grade} 급수 시험 ${a.score}점 ${a.passed ? '(통과)' : ''}`;
-      if (a.type === 'accept') return `👩‍🏫 선생님이 <span class="hanja">${C(a.idx).h}</span>의 답을 인정했어요`;
+      if (a.type === 'accept') return `👩‍🏫 선생님이 <span class="hanja">${C(a.idx).h}</span>의 답을 인정했어요${a.undone ? ` <span class="muted">(${shortDate(a.undone)}에 인정 취소)</span>` : ''}`;
       if (a.type === 'level') return `🧪 ${a.grade} 레벨테스트 · 아는 한자 ${a.known}/${a.total}`;
       if (a.type === 'relearn') return `🔁 틀린 한자 다시 보기 ${(a.list || []).map((i) => C(i).h).join(' ')}`;
       if (a.type === 'writing') return `✏️ 글짓기: “${esc(a.text)}”`;
@@ -2472,7 +2472,7 @@
     let k = -1;
     st.activity.forEach((a, j) => { if (a.type === 'exam' && a.grade === g.name) k = j; });
     const acc = new Set(st.activity.slice(k + 1)
-      .filter((a) => a.type === 'accept' && a.kind === 'exam' && C(a.idx).gradeIdx === GRADES.indexOf(g)).map((a) => a.idx));
+      .filter((a) => a.type === 'accept' && a.kind === 'exam' && !a.undone && C(a.idx).gradeIdx === GRADES.indexOf(g)).map((a) => a.idx));
     return Math.max(0, n - acc.size);
   }
   // 급수 시험 뒤(다시 보기 전이든 후든) 선생님 인정으로 틀린 한자가 모두 없어졌으면 통과
@@ -2498,6 +2498,8 @@
     S.pending = (S.pending || []).filter((p) => !(p.kind === t.kind && p.grade === g.id))
       .concat(t.items.filter(isAmbiguous).map((it) => ({ kind: t.kind, grade: g.id, idx: it.idx, m: it.m, s: it.s, date: ds })));
     let next;
+    // 결과 화면에서 선생님이 바로 인정한 답도 기록해요 (나중에 선생님 메뉴에서 취소할 수 있게)
+    t.items.filter((it) => it.over && itemOk(it)).forEach((it) => logActivity({ type: 'accept', idx: it.idx, kind: t.kind, grade: g.id, m: it.m, s: it.s }));
     if (t.kind === 'level') {
       t.items.forEach((it) => { if (itemOk(it) && !S.learned[it.idx]) S.known[it.idx] = ds; });
       S.levels[g.id] = { date: ds, known: right, total: t.items.length };
@@ -2675,6 +2677,40 @@
 
   /* ================= 화면: 선생님 메뉴 ================= */
   // 선생님이 나중에 애매한 답을 인정하면 학생의 진도에 반영합니다.
+  // 선생님 인정 취소: 그 한자를 틀린 답으로 되돌려요. 이미 그 급수를 통과했으면 되돌릴 수 없어요.
+  function unacceptReason(st, a) {
+    const g = GRADES.find((x) => x.id === a.grade) || GRADES[C(a.idx).gradeIdx];
+    const k = GRADES.indexOf(g);
+    if (st.passed[g.id]) return `${g.name}${josa(g.name, '을')} 이미 통과해서 취소할 수 없어요.`;
+    if (k !== st.gradeIdx) return '지금 공부하는 급수가 아니라서 취소할 수 없어요.';
+    if (a.kind === 'level' && st.exams[g.id]) return '이미 급수 시험을 봐서 취소할 수 없어요.';
+    if (a.kind === 'exam' && !['exam', 'relearn'].includes(st.phase)) return '취소할 수 없는 단계예요.';
+    return '';
+  }
+  function unacceptAnswer(st, a) {
+    if (unacceptReason(st, a)) return false;
+    const g = GRADES.find((x) => x.id === a.grade) || GRADES[C(a.idx).gradeIdx];
+    const i = a.idx;
+    if (a.kind === 'level') {
+      if (st.known[i]) delete st.known[i];
+      if (!st.learned[i] && !st.queue.includes(i)) st.queue = st.queue.concat([i]).sort((x, y) => x - y);
+      if (st.levels[g.id]) st.levels[g.id].known = Math.max(0, st.levels[g.id].known - 1);
+      if (st.phase === 'exam' || st.phase === 'level') st.phase = 'study';
+    } else {
+      const rec = st.exams[g.id];
+      if (rec) {
+        if (rec.wrong && !rec.wrong.includes(i)) rec.wrong.push(i);
+        const total = rec.n || g.end - g.start;
+        rec.last = Math.round(((total - (examWrongLeft(st, g) || 0)) / total) * 100);
+      }
+      if (!st.missed.includes(i)) st.missed.push(i);
+      if (!st.relearn.includes(i)) st.relearn.push(i);
+      st.retest = [...new Set((st.retest || []).concat([i]))];
+      st.phase = 'relearn';
+    }
+    a.undone = fmt(today());
+    return true;
+  }
   function acceptAnswer(st, q) {
     const g = GRADES.find((x) => x.id === q.grade);
     const cur = GRADES[Math.min(st.gradeIdx, GRADES.length - 1)];
@@ -2686,7 +2722,7 @@
       // 공부할 한자가 하나도 남지 않으면(모두 아는 한자) 급수를 통과해요.
       if (cur === g && st.phase === 'study' && !st.queue.length) passGrade(g, st);
     }
-    st.activity.push({ date: ds, type: 'accept', idx: q.idx, kind: q.kind });
+    st.activity.push({ date: ds, type: 'accept', idx: q.idx, kind: q.kind, grade: q.grade, m: q.m, s: q.s });
     // 급수 시험: '틀린 한자 다시 보기'를 했든 안 했든, 인정으로 100점이 되면 다음 급수로
     if (q.kind === 'exam' && cur === g && ['relearn', 'exam'].includes(st.phase)) {
       const rec = st.exams[g.id];
@@ -2824,6 +2860,18 @@
             return `<li><span class="hanja">${pc.h}</span> ${hunum(pc)} — 학생 답 “<b>${esc(q.m)} ${esc(q.s)}</b>” <span class="small muted">(${GRADES.find((x) => x.id === q.grade).name} ${q.kind === 'level' ? '레벨테스트' : '급수 시험'}, ${shortDate(q.date)})</span>
               <span class="row" style="margin-top:4px"><button class="btn soft" data-acc="${k}" data-st="${esc(n)}">✔ 인정</button><button class="btn ghost" data-rej="${k}" data-st="${esc(n)}">인정 안 함</button></span></li>`;
           }).join('')}</ul>` : ' 없음<br>'}
+          <b>선생님이 인정한 답</b>${(() => {
+            const acc = st.activity.map((a, j) => ({ a, j })).filter(({ a }) => a.type === 'accept' && (a.kind === 'level' || a.kind === 'exam')).reverse().slice(0, 15);
+            if (!acc.length) return ' 없음<br>';
+            return `<ul class="plain-list acc-list">${acc.map(({ a, j }) => {
+              const ac = C(a.idx);
+              const g = GRADES.find((x) => x.id === a.grade) || GRADES[ac.gradeIdx];
+              const why = a.undone ? '' : unacceptReason(st, a);
+              return `<li class="${a.undone ? 'undone' : ''}"><span class="hanja">${ac.h}</span> ${hunum(ac)} — ${a.m || a.s ? `학생 답 “<b>${esc(a.m || '')} ${esc(a.s || '')}</b>”` : '<span class="muted">학생 답 기록 없음</span>'}
+                <span class="small muted">(${g.name} ${a.kind === 'level' ? '레벨테스트' : '급수 시험'}, ${shortDate(a.date)})</span>
+                ${a.undone ? `<span class="pill gray">${shortDate(a.undone)} 취소함</span>` : why ? `<div class="small muted">${why}</div>` : `<button class="btn ghost small-btn" data-unacc="${j}" data-st="${esc(n)}">↩ 인정 취소</button>`}</li>`;
+            }).join('')}</ul>`;
+          })()}
           <b>최근 글짓기</b><ul class="plain-list">${st.writings.slice(-5).reverse().map((w) => `<li>${shortDate(w.date)} “${esc(w.text)}”</li>`).join('') || '<li>없음</li>'}</ul>
           <p class="small muted" style="margin:8px 0 0">비밀번호 초기화와 학생 삭제는 '설정' 탭에서 할 수 있어요.</p></td></tr>` : '';
       return `<tr><td><button class="linkbtn" data-open-st="${esc(n)}">${esc(shortName(n))}</button></td>
@@ -2920,6 +2968,17 @@
     $app.querySelectorAll('[data-eg]').forEach((b) => b.addEventListener('click', () => { easyGrade = +b.dataset.eg; renderTeacher(); }));
     $app.querySelectorAll('[data-open-st]').forEach((b) => b.addEventListener('click', () => {
       teacherOpen = teacherOpen === b.dataset.openSt ? null : b.dataset.openSt;
+      renderTeacher();
+    }));
+    $app.querySelectorAll('[data-unacc]').forEach((b) => b.addEventListener('click', () => {
+      const n = b.dataset.st;
+      const st = n === user ? S : loadState(n);
+      const a = st.activity[+b.dataset.unacc];
+      if (!a || a.type !== 'accept') return;
+      const what = a.kind === 'level' ? '아는 한자에서 빼고 공부할 한자에 넣어요' : '틀린 답으로 되돌리고 다시 익힌 뒤 재시험을 보게 해요';
+      if (!confirm(`${shortName(n)}의 ${C(a.idx).h}(${hunum(C(a.idx))}) 인정을 취소할까요?\n${what}.`)) return;
+      if (!unacceptAnswer(st, a)) { alert(unacceptReason(st, a)); return; }
+      if (n === user) save(); else lsSet(stateKey(n), JSON.stringify(st));
       renderTeacher();
     }));
     $app.querySelectorAll('[data-acc], [data-rej]').forEach((b) => b.addEventListener('click', () => {
