@@ -175,7 +175,7 @@
   function ranking() {
     const list = users().filter((n) => !RANK_SKIP(n)).map((n) => {
       const st = n === user ? S : loadState(n);
-      return { n, known: Object.keys(st.known || {}).length, learned: (st.order || []).length };
+      return { n, known: knownCount(st), learned: (st.order || []).length };
     }).sort((a, b) => b.known - a.known || b.learned - a.learned || a.n.localeCompare(b.n, 'ko'));
     list.forEach((x, k) => {
       const prev = list[k - 1];
@@ -253,6 +253,12 @@
   }
   const isRedo = (i) => (S.redo || []).some((r) => r.idx === i);
   const curGrade = () => GRADES[Math.min(S.gradeIdx, GRADES.length - 1)];
+  // 이미 아는 한자 수: 레벨테스트에서 맞힌 한자 + 통과한 급수의 한자 모두
+  function knownCount(st) {
+    const set = new Set(Object.keys(st.known || {}).map(Number));
+    GRADES.forEach((g) => { if ((st.passed || {})[g.id]) for (let i = g.start; i < g.end; i++) set.add(i); });
+    return set.size;
+  }
   // 남은 한자 = 아직 안 배운 한자 + 틀려서 다시 배울 한자 (완전 학습이 되어야 급수 시험)
   const queueLeft = () => S.queue.filter((x) => !S.learned[x]).length + (S.redo || []).length;
   // 틀린 한자를 모두 배우면 급수 시험 단계로 넘어갑니다.
@@ -599,10 +605,13 @@
       const c = C(i);
       steps.push({ kind: 'learn', idx: i, stage: 'learn' });
       steps.push({ kind: 'match', idx: i, stage: 'match', order: shuffle(c.words.map((_, k) => k)), done: [], selL: null, selR: null });
+      const order = shuffle(c.words.map((_, k) => k));
+      steps.push({ kind: 'cloze', idx: i, stage: 'cloze', order, filled: [], cur: order[0] });
       steps.push({ kind: 'check', idx: i, stage: 'check', word: pick(c.words), m: '', s: '', graded: false });
+      steps.push(inferQuestion(i));
     });
     steps.push({ kind: 'done' });
-    return { type: 'relearn', plan: { newIdx: null, reviews: [], week: [] }, date: fmt(today()), steps, i: 0, correct: 0, total: 0, started: Date.now() };
+    return { type: 'relearn', failedIdx: [], plan: { newIdx: null, reviews: [], week: [] }, date: fmt(today()), steps, i: 0, correct: 0, total: 0, started: Date.now() };
   }
 
   function buildLesson() {
@@ -682,8 +691,9 @@
       logActivity({ type: 'lesson', idx: session.plan.newIdx, extra: true, ...quiz });
     } else if (session.type === 'relearn') {
       logActivity({ type: 'relearn', list: S.relearn.slice(), ...quiz });
-      S.relearn = [];
-      S.phase = 'exam';
+      // 완전 학습: 확인하기·추론하기를 틀린 한자는 1~5단계를 한 번 더, 모두 맞혀야 재시험
+      S.relearn = S.relearn.filter((x) => (session.failedIdx || []).includes(x));
+      if (!S.relearn.length) S.phase = 'exam';
     } else if (session.type === 'oldreview') {
       logActivity({ type: 'oldreview', ...quiz });
     } else if (session.type === 'weekly') {
@@ -700,6 +710,7 @@
     // 새로 배우는 한자의 확인하기·추론하기를 틀리면 그 한자는 다음 학습일에 다시 배워요.
     const st = session.steps[session.i];
     if (!ok && session.plan && i === session.plan.newIdx && (st.kind === 'check' || st.kind === 'infer')) session.failed = true;
+    if (!ok && session.type === 'relearn' && (st.kind === 'check' || st.kind === 'infer')) session.failedIdx = [...new Set((session.failedIdx || []).concat([i]))];
     save();
   }
 
@@ -1124,7 +1135,7 @@
         <div class="stats home-stats">
           <div><i class="st-ico" aria-hidden="true">🔥</i><p><b>${streak()}</b><span>연속 학습일</span></p></div>
           <div><i class="st-ico" aria-hidden="true">📚</i><p><b>${S.order.length}</b><span>공부한 한자</span></p></div>
-          <div><i class="st-ico" aria-hidden="true">💡</i><p><b>${Object.keys(S.known).length}</b><span>이미 아는 한자</span></p></div>
+          <div><i class="st-ico" aria-hidden="true">💡</i><p><b>${knownCount(S)}</b><span>이미 아는 한자</span></p></div>
           ${(() => { const r = ranking(); const me = r.find((x) => x.n === user); return `<div class="rank-cell"><i class="st-ico" aria-hidden="true">🏅</i><p><b>${me ? `${me.rank}<small class="unit">위</small>` : '-'}</b><span>${me ? `${r.length}명 중 ` : ''}랭킹</span></p></div>`; })()}
         </div>
         <div class="row" style="margin-top:16px"><b>${g.name}</b><span class="spacer"></span>
@@ -1971,9 +1982,10 @@
       </div>
       <div class="options two">${opts}</div>
       <div id="fb">${answered ? inferFeedback(step) : ''}</div>
-      ${answered ? `<button class="btn block big" id="next" ${waitLeft(step) ? 'disabled' : ''}>${waitLeft(step) ? `해설을 읽어 봐요 (<span id="wait">${waitLeft(step)}</span>)` : '적용하기 →'}</button>` : ''}
+      ${answered ? `<button class="btn block big" id="next" ${waitLeft(step) ? 'disabled' : ''}>${waitLeft(step) ? `해설을 읽어 봐요 (<span id="wait">${waitLeft(step)}</span>)` : inferNextLabel()}</button>` : ''}
     </div>`;
   }
+  const inferNextLabel = () => ((session.steps[session.i + 1] || {}).kind === 'write' ? '적용하기 →' : '다음 →');
   // 해설을 읽도록 '다음' 버튼은 몇 초 뒤에 눌러져요
   const READ_WAIT = 5;
   const waitLeft = (step) => (step.readyAt ? Math.max(0, Math.ceil((step.readyAt - Date.now()) / 1000)) : 0);
@@ -2015,7 +2027,7 @@
           if (n) { const w = document.getElementById('wait'); if (w) w.textContent = n; return; }
           clearInterval(t);
           b.disabled = false;
-          b.textContent = '적용하기 →';
+          b.textContent = inferNextLabel();
           b.focus({ preventScroll: true });
         }, 250);
       }
@@ -2112,7 +2124,11 @@
     if (session.type === 'weekly') title = '일주일 복습 끝!';
     if (session.type === 'review') title = '복습 끝!';
     if (session.type === 'oldreview') { title = '복습 끝!'; msg = '틀린 한자는 다음 복습에 다시 나와요. 이제 오늘 공부하러 가요!'; }
-    if (session.type === 'relearn') {
+    if (session.type === 'relearn' && S.relearn.length) {
+      title = '조금만 더!';
+      msg = `틀린 문제가 있어서 <span class="hanja">${S.relearn.map((x) => C(x).h).join(' ')}</span>${S.relearn.length > 1 ? '를' : josa(hunum(C(S.relearn[0])), '을')} 한 번 더 익혀요. 모두 맞히면 재시험을 봐요.`;
+      action = `<a class="btn block big" href="#/relearn/again">🔁 다시 익히기</a>`;
+    } else if (session.type === 'relearn') {
       title = '다시 보기 끝!';
       msg = `이제 ${g.name} 급수 시험을 다시 볼 차례예요. 100점에 도전해요!`;
       action = `<a class="btn block big" href="#/test">🏆 ${g.name} 급수 시험 다시 보기</a>`;
@@ -2812,7 +2828,7 @@
           <p class="small muted" style="margin:8px 0 0">비밀번호 초기화와 학생 삭제는 '설정' 탭에서 할 수 있어요.</p></td></tr>` : '';
       return `<tr><td><button class="linkbtn" data-open-st="${esc(n)}">${esc(shortName(n))}</button></td>
         <td>${st.phase === 'done' ? '완료' : g.name}<div class="small muted">${PHASE_NAME[st.phase] || ''}${left}</div>${(st.pending || []).length ? `<div class="pill">🤔 확인 ${st.pending.length}</div>` : ''}</td>
-        <td>${Object.keys(st.known).length}</td><td>${st.order.length}</td>
+        <td>${knownCount(st)}</td><td>${st.order.length}</td>
         <td>${ex ? `${ex.last}점<div class="small muted">${ex.attempts}번</div>` : '-'}</td>
         <td>${todaySecs(st) ? fmtTime(todaySecs(st)) : '-'}</td><td>${fmtTime(totalSecs(st))}</td>
         <td>${last ? shortDate(last) : '-'}</td></tr>${detail}`;
