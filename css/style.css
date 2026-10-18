@@ -961,3 +961,7 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 .ii-opts li.x { color: var(--ink-soft); }
 .ii-clue { font-size: 14px; line-height: 1.55; }
 .ii-clue b { color: var(--s6); margin-right: 4px; }
+
+/* 4·5단계 제출 전 검토 안내 */
+.feedback.review-ask { background: var(--s6-soft); color: var(--ink); font-size: 18px; font-weight: 700; text-align: center; border-radius: 14px; padding: 10px 12px; }
+.opt.inf-opt.sel { border-color: var(--s6); background: var(--s6-soft); font-weight: 700; }

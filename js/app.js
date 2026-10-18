@@ -1707,6 +1707,9 @@
         <div class="prompt"><mark>색으로 표시된 글자</mark>에 쓰인 한자의 <b>뜻(훈)</b>과 <b>음</b>을 쓰세요.</div>
       </div>`;
   }
+  // 4·5단계: 처음 제출하면 '검토하세요.'를 보여 주고, 한 번 더 눌러야 채점해요
+  const REVIEW_MSG = '<div class="feedback review-ask">🧐 검토하세요.</div>';
+  const REVIEW_BTN = '검토했어요, 제출하기';
   function renderCheck(step) {
     const c = C(step.idx);
     const next = session.steps[session.i + 1] || {};
@@ -1719,8 +1722,8 @@
           <div><label for="m">뜻 (훈)</label><input id="m" lang="ko" value="${esc(step.m)}" ${step.graded ? 'readonly' : ''}></div>
           <div><label for="s">음 (소리)</label><input id="s" lang="ko" value="${esc(step.s)}" ${step.graded ? 'readonly' : ''}></div>
         </div>
-        <div id="fb">${step.graded ? checkFeedback(step) : ''}</div>
-        ${step.graded ? nextBtn(nextLabel) : '<button class="btn block big" id="go">정답 확인</button>'}
+        <div id="fb">${step.graded ? checkFeedback(step) : step.reviewed ? REVIEW_MSG : ''}</div>
+        ${step.graded ? nextBtn(nextLabel) : `<button class="btn block big" id="go">${step.reviewed ? REVIEW_BTN : '정답 확인'}</button>`}
       </form>
     </div>`;
   }
@@ -1750,6 +1753,13 @@
       if (!step.m || !step.s) {
         document.getElementById('fb').innerHTML = '<div class="feedback no">뜻과 음을 모두 써 주세요. 모르면 짐작해서 써도 괜찮아요!</div>';
         (step.m ? s : m).focus();
+        return;
+      }
+      if (step.stage === 'check' && !step.reviewed) {
+        step.reviewed = true;
+        save();
+        document.getElementById('fb').innerHTML = REVIEW_MSG;
+        document.getElementById('go').textContent = REVIEW_BTN;
         return;
       }
       step.okM = meaningOk(c, step.m);
@@ -1962,7 +1972,8 @@
       let cls = '';
       if (answered && o === step.answer) cls = ' correct';
       else if (answered && o === step.chosen) cls = ' wrong';
-      return `<button class="opt inf-opt${cls}" data-k="${k}" ${answered ? 'disabled' : ''}><span class="opt-n">${k + 1}</span>${o}</button>`;
+      else if (!answered && o === step.pick) cls = ' sel';
+      return `<button class="opt inf-opt${cls}" data-k="${k}" ${answered ? 'disabled' : ''} aria-pressed="${!answered && o === step.pick}"><span class="opt-n">${k + 1}</span>${o}</button>`;
     }).join('');
     return `<div class="card lesson-card">${stageHtml('infer')}
       <div class="inf-head"><span class="inf-tag">오늘의 어휘 탐정</span><span class="today-chip"><span class="hanja">${c.h}</span> ${hunum(c)}</span></div>
@@ -1977,7 +1988,8 @@
       </div>
       <div class="options">${opts}</div>
       <div id="fb">${answered ? `<div class="explain"><div class="answer">${step.chosen === step.answer ? '⭕ 잘 추론했어요!' : `정답 <b>${step.answer}</b>`}</div>
-        <p class="inf-sum"><b>${label}</b> : ${step.answer}</p></div>` : ''}</div>
+        <p class="inf-sum"><b>${label}</b> : ${step.answer}</p></div>` : step.reviewed ? REVIEW_MSG : ''}</div>
+      ${answered ? '' : `<button class="btn block big" id="go" ${step.pick ? '' : 'disabled'}>${step.reviewed ? REVIEW_BTN : '정답 확인'}</button>`}
       ${answered ? `<button class="btn block big" id="next" ${waitLeft(step) ? 'disabled' : ''}>${waitLeft(step) ? `해설을 읽어 봐요 (<span id="wait">${waitLeft(step)}</span>)` : inferNextLabel()}</button>` : ''}
     </div>`;
   }
@@ -2009,14 +2021,27 @@
       renderStep();
     }));
     $app.querySelectorAll('.inf-opt').forEach((b) => b.addEventListener('click', () => {
-      step.chosen = step.options[+b.dataset.k];
+      step.pick = step.options[+b.dataset.k];
+      save();
+      renderStep();
+    }));
+    const go = document.getElementById('go');
+    if (go) go.addEventListener('click', () => {
+      if (!step.pick) return;
+      if (!step.reviewed) {
+        step.reviewed = true;
+        save();
+        renderStep();
+        return;
+      }
+      step.chosen = step.pick;
       step.readyAt = Date.now() + READ_WAIT * 1000;
       const ok = step.chosen === step.answer;
       score(ok, step.idx);
       if (S.log[session.date] && session.plan && step.idx === session.plan.newIdx) S.log[session.date].infer = ok;
       save();
       renderStep();
-    }));
+    });
   }
 
   // 복습 문제(객관식, 바로 채점)
