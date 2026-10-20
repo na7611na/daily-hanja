@@ -254,10 +254,24 @@
   const isRedo = (i) => (S.redo || []).some((r) => r.idx === i);
   const curGrade = () => GRADES[Math.min(S.gradeIdx, GRADES.length - 1)];
   // 이미 아는 한자 수: 레벨테스트에서 맞힌 한자 + 통과한 급수의 한자 모두
-  function knownCount(st) {
+  function knownSet(st) {
     const set = new Set(Object.keys(st.known || {}).map(Number));
-    GRADES.forEach((g) => { if ((st.passed || {})[g.id]) for (let i = g.start; i < g.end; i++) set.add(i); });
-    return set.size;
+    GRADES.forEach((g) => {
+      if ((st.passed || {})[g.id]) { for (let i = g.start; i < g.end; i++) set.add(i); return; }
+      // 급수 시험을 본 급수: 마지막 시험에서 틀렸거나 아직 다시 익히는 한자만 빼고 모두 아는 한자예요
+      const ex = (st.exams || {})[g.id];
+      if (!ex) return;
+      const out = new Set([...(ex.wrong || []), ...(st.relearn || [])]);
+      for (let i = g.start; i < g.end; i++) if (!out.has(i)) set.add(i);
+    });
+    return set;
+  }
+  const knownCount = (st) => knownSet(st).size;
+  // 출석: '오늘의 한자'를 마쳤거나, 그날 다시 익히기·급수 시험·복습 같은 공부를 한 날 (선생님 인정 기록은 빼요)
+  function studiedOn(st, ds) {
+    const e = (st.log || {})[ds];
+    if (e && e.done) return true;
+    return (st.activity || []).some((a) => a.date === ds && a.type !== 'accept');
   }
   // 남은 한자 = 아직 안 배운 한자 + 틀려서 다시 배울 한자 (완전 학습이 되어야 급수 시험)
   const queueLeft = () => S.queue.filter((x) => !S.learned[x]).length + (S.redo || []).length;
@@ -292,10 +306,9 @@
   function streak(st = S) {
     let d = today();
     let n = 0;
-    if (!(st.log[fmt(d)] && st.log[fmt(d)].done)) d = addDays(d, -1);
+    if (!studiedOn(st, fmt(d))) d = addDays(d, -1);
     for (let guard = 0; guard < 4000; guard++) {
-      const e = st.log[fmt(d)];
-      if (e && e.done) n++;
+      if (studiedOn(st, fmt(d))) n++;
       else if (isWeekday(d)) break; // 주말은 쉬어도 끊기지 않고, 공부하면 더해요
       d = addDays(d, -1);
     }
@@ -1079,7 +1092,8 @@
     const g = curGrade();
     const total = g.end - g.start;
     let knownN = 0, learnedN = 0;
-    for (let i = g.start; i < g.end; i++) { if (S.known[i]) knownN++; else if (S.learned[i]) learnedN++; }
+    const ks = knownSet(S);
+    for (let i = g.start; i < g.end; i++) { if (ks.has(i)) knownN++; else if (S.learned[i]) learnedN++; }
     const ds = fmt(t);
     // 이번 주 상황판: 월~일 7칸, 학습을 마친 날에 출석 도장 (누르면 그날 배운 한자)
     const mon = mondayOf(t);
@@ -1087,9 +1101,10 @@
       const d = fmt(addDays(mon, k));
       const e = S.log[d];
       const idx = e && e.newIdx !== null && e.newIdx !== undefined && S.learned[e.newIdx] === d ? e.newIdx : null;
-      const cls = [e && e.done ? 'done' : '', d === ds ? 'today' : '', k >= 5 ? 'wkend' : ''].join(' ');
+      const came = studiedOn(S, d);
+      const cls = [came ? 'done' : '', d === ds ? 'today' : '', k >= 5 ? 'wkend' : ''].join(' ');
       const dayChars = todaysNew(parseDate(d));
-      const stamp = e && e.done
+      const stamp = came
         ? (dayChars.length ? `<button class="cell-in stamp-btn" data-day="${d}" aria-label="${DAY[(k + 1) % 7]}요일 출석 · 배운 한자 ${dayChars.length}자 보기">${STAMP_SVG}</button>` : `<span class="stamp-btn" aria-label="출석">${STAMP_SVG}</span>`)
         : '';
       // 금요일: 일주일 복습 하는 날 (마치면 ✔)
