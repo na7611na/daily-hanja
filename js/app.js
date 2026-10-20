@@ -730,7 +730,7 @@
   }
   function wordNote(w) {
     const notes = [];
-    if (w.note) notes.push({ key: `w:${w.word}`, text: w.note });
+    if (w.note) notes.push({ key: `w:${w.word}`, text: w.note, src: w.noteSrc });
     const read = w.read.replace(/\s/g, '');
     [...w.word].forEach((ch, k) => {
       const syl = read[k];
@@ -738,19 +738,20 @@
       const sounds = pairs.map((x) => x[1]);
       if (!syl || !sounds.length || w.note) return;
       if (ch === '不' && syl === '부') {
-        notes.push({ key: 'alt:不', text: `'不(아닐 불)'은 본래 '불'로 읽지만, 'ㄷ'이나 'ㅈ'으로 시작하는 글자 앞에서는 소리 내기 쉽게 <b>'부'</b>로 읽어요. (부족, 부정, 부동)` });
+        notes.push({ key: 'alt:不', text: `'不(아닐 불)'은 본래 '불'로 읽지만, 첫소리가 'ㄷ'이나 'ㅈ'인 말 앞에서는 <b>'부'</b>로 읽어요. (부족, 부정, 부동)`, src: "표준국어대사전 '부-(不)'" });
       } else if (!sounds.includes(syl)) {
         const s0 = sounds.find((x) => dueum(x) === syl);
-        if (s0 && k === 0) notes.push({ key: `du:${ch}`, text: `'${ch}'의 본래 소리는 '${s0}'${josa(s0, '이에요')}. 하지만 낱말의 <b>첫머리</b>에서는 <b>'${syl}'</b>${josa(syl, '으로')} 읽어요. (두음 법칙) 다른 글자 뒤에서는 '${s0}'${josa(s0, '으로')} 읽어요.` });
+        if (s0 && k === 0) notes.push({ key: `du:${ch}`, text: `'${ch}'의 본래 소리는 '${s0}'${josa(s0, '이에요')}. 하지만 낱말의 <b>첫머리</b>에서는 <b>'${syl}'</b>${josa(syl, '으로')} 읽어요. (두음 법칙) 다른 글자 뒤에서는 '${s0}'${josa(s0, '으로')} 읽어요.`, src: '한글 맞춤법 제10~12항' });
       } else if (sounds.length > 1 && syl !== sounds[0]) {
         const [m0, s0] = pairs[0];
         const [m1] = pairs.find((x) => x[1] === syl);
-        notes.push({ key: `alt:${ch}`, text: `'${ch}'에는 '${m0} ${s0}', '${m1} ${syl}'처럼 소리가 여럿 있어요. '${w.read}'에서는 <b>'${syl}'</b>${josa(syl, '으로')} 읽어요.` });
+        notes.push({ key: `alt:${ch}`, text: `'${ch}'에는 '${m0} ${s0}', '${m1} ${syl}'처럼 소리가 여럿 있어요. '${w.read}'에서는 <b>'${syl}'</b>${josa(syl, '으로')} 읽어요.`, src: `한자사전 '${ch}'` });
       }
     });
     return notes;
   }
-  const noteHtml = (w) => wordNote(w).map((n) => `<div class="word-note">💡 ${n.text}</div>`).join('');
+  const srcHtml = (src) => (src ? `<small class="note-src">📖 출처: ${src}</small>` : '');
+  const noteHtml = (w) => wordNote(w).map((n) => `<div class="word-note">💡 ${n.text}${srcHtml(n.src)}</div>`).join('');
   // 2단계에서 뜻을 바르게 이었을 때 설명 카드를 띄워요
   function openNotePop(w, notes, target) {
     const back = document.createElement('div');
@@ -760,7 +761,7 @@
       <div class="np-word">${w.read}</div>
       ${wordCharsHtml(w, target)}
       <div class="np-mean">${w.mean}</div>
-      ${notes.map((n) => `<p class="np-text">${n.text}</p>`).join('')}
+      ${notes.map((n) => `<p class="np-text">${n.text}${srcHtml(n.src)}</p>`).join('')}
       <button class="btn block" id="np-ok">알겠어요</button>
     </div>`;
     const close = () => { back.remove(); document.removeEventListener('keydown', onKey); };
@@ -785,11 +786,13 @@
   // 훈장님: 김홍도 〈서당〉(18세기, 퍼블릭 도메인)의 훈장님 얼굴 — img/hunjang.jpg
   const HUNJANG_SVG = '<img src="img/hunjang.jpg" alt="" draggable="false">';
   const easyMeanText = (c) => (typeof EASY_MEANINGS !== 'undefined' && EASY_MEANINGS[c.h]) || '';
+  const easySrc = (c) => (typeof EASY_SRC !== 'undefined' && EASY_SRC[c.h]) || '';
   // typing: 1단계에서는 비워 두고 bindLearn이 한 글자씩 써요
   const easyMeanHtml = (c, typing = false) => (easyMeanText(c)
     ? `<div class="easy-mean${typing ? ' typing' : ''}"><span class="em-face">${HUNJANG_SVG}</span><div class="em-body"><span class="em-tag">훈장님 가르침</span>
         <p class="em-txt">${typing ? '' : esc(easyMeanText(c)).replace(/「([^」]*)」/g, '<b>$1</b>')}</p>
-        ${easyExample(c) ? `<p class="em-ex"${typing ? ' hidden' : ''}><span>📖 예문</span> <span class="em-ex-t">${typing ? '' : easyExample(c)}</span></p>` : ''}</div></div>` : '');
+        ${easyExample(c) ? `<p class="em-ex"${typing ? ' hidden' : ''}><span>📖 예문</span> <span class="em-ex-t">${typing ? '' : easyExample(c)}</span></p>` : ''}
+        ${!typing && easySrc(c) ? `<small class="note-src">출처: ${easySrc(c)}</small>` : ''}</div></div>` : '');
   function charHeadHtml(c, learn = null) {
     const pairs = hunumPairs(c);
     let n = 0;
@@ -2923,12 +2926,12 @@
       const mark = (t) => esc(t).replace(/「([^」]*)」/g, '<b>$1</b>');
       body = `<div class="card">
         <h3 style="margin-top:0">📜 옛말 풀이 <span class="small muted">${keys.length}자</span></h3>
-        <p class="small muted" style="margin-top:0">훈이 옛말이라 어려운 글자에 1단계 '오늘의 한자'와 한자 카드에서 '훈장님 가르침'으로 보여 주는 풀이와 예문이에요. 예문은 훈(옛말)이 들어간 표준국어대사전의 용례이고, 사전에 없으면 널리 알려진 고전에서 가져왔어요. 예문이 없는 글자는 '예문 없음'으로 표시돼요.</p>
+        <p class="small muted" style="margin-top:0">훈이 옛말이라 어려운 글자에 1단계 '오늘의 한자'와 한자 카드에서 '훈장님 가르침'으로 보여 주는 풀이와 예문이에요. 풀이는 표준국어대사전의 뜻풀이와 한자사전의 한자 뜻에서만 가져왔고, 글자마다 출처를 적었어요. 예문은 훈(옛말)이 들어간 표준국어대사전의 용례이고, 사전에 없으면 널리 알려진 고전에서 가져왔어요. 예문이 없는 글자는 '예문 없음'으로 표시돼요.</p>
         <div class="tabs grade-tabs easy-tabs" style="--n:${byGrade.length}">${byGrade.map(({ g, k, list }) => `<button class="${k === easyGrade ? 'on' : ''}" data-eg="${k}">${g.name}<small>${list.length}자</small></button>`).join('')}</div>
         ${shown.map(({ g, list }) => `<h4 class="easy-g">${g.name} <span class="small muted">${list.length}자</span></h4>
           <div style="overflow-x:auto"><table class="class-table easy-table">
             <tr><th>한자</th><th>훈 음</th><th>풀이 · 예문</th></tr>
-            ${list.map((c) => `<tr><td class="hanja">${c.h}</td><td>${hunum(c)}</td><td>${mark(EASY_MEANINGS[c.h])}${easyExample(c) ? `<div class="ex">📖 ${easyExample(c)}</div>` : '<div class="ex muted">📖 예문 없음</div>'}</td></tr>`).join('')}
+            ${list.map((c) => `<tr><td class="hanja">${c.h}</td><td>${hunum(c)}</td><td>${mark(EASY_MEANINGS[c.h])}${easySrc(c) ? `<small class="note-src">출처: ${easySrc(c)}</small>` : ''}${easyExample(c) ? `<div class="ex">📖 ${easyExample(c)}</div>` : '<div class="ex muted">📖 예문 없음</div>'}</td></tr>`).join('')}
           </table></div>`).join('')}
       </div>`;
     } else if (teacherTab === 'infer') {

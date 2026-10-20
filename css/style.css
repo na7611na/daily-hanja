@@ -965,3 +965,6 @@ ul.meta-tips { padding-left: 20px; margin: 6px 0; }
 /* 4·5단계 제출 전 검토 안내 */
 .feedback.review-ask { background: var(--s6-soft); color: var(--ink); font-size: 18px; font-weight: 700; text-align: center; border-radius: 14px; padding: 10px 12px; }
 .opt.inf-opt.sel { border-color: var(--s6); background: var(--s6-soft); font-weight: 700; }
+
+/* 설명 출처 */
+.note-src { display: block; margin-top: 4px; font-size: 12px; color: var(--ink-soft); font-weight: 400; }
