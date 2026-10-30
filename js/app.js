@@ -871,10 +871,14 @@
 
   /* ================= 화면: 입장 ================= */
   let loginMode = 'in';
+  // 아이디 기억하기: 이 기기에만 저장해요 (인터넷에는 올리지 않아요)
+  const REMEMBER_KEY = 'everyday-hanja:remember-id';
+  const rememberedId = () => { try { return localStorage.getItem(REMEMBER_KEY) || ''; } catch (e) { return ''; } };
+  const setRememberedId = (n) => { try { if (n) localStorage.setItem(REMEMBER_KEY, n); else localStorage.removeItem(REMEMBER_KEY); } catch (e) { /* 무시 */ } };
   function renderLogin() {
     document.body.classList.add('logged-out');
-    const list = users();
     const isNew = loginMode === 'new';
+    const saved = isNew ? '' : rememberedId();
     $app.innerHTML = `
       <div class="card hero login">
         <div class="login-mark">漢</div>
@@ -883,7 +887,8 @@
         <div class="seg"><button class="${isNew ? '' : 'on'}" data-mode="in">입장하기</button><button class="${isNew ? 'on' : ''}" data-mode="new">처음 왔어요</button></div>
         <form id="login" autocomplete="off">
           <label for="name">이름(아이디)</label>
-          <input id="name" class="text-input" maxlength="20" placeholder="예) 54 이순신" required>
+          <input id="name" class="text-input" maxlength="20" placeholder="예) 54 이순신" value="${esc(saved)}" required>
+          <label class="remember"><input type="checkbox" id="remember" ${saved ? 'checked' : ''}> 아이디 기억하기</label>
           <label for="pw">비밀번호${isNew ? ' 만들기 (4글자 이상)' : ''}</label>
           <input id="pw" type="password" class="text-input" maxlength="30" required autocomplete="off">
           ${isNew ? `<label for="pw2">비밀번호 한 번 더</label>
@@ -892,11 +897,6 @@
           <button class="btn block">${isNew ? '만들고 시작하기 🚀' : '입장하기 🚀'}</button>
         </form>
       </div>
-      ${list.length && !isNew ? `<div class="card">
-        <h3>함께 공부하는 친구들</h3>
-        <p class="small muted">내 이름을 누르고 비밀번호를 넣으면 이어서 공부할 수 있어요.</p>
-        <div class="name-list">${list.map((n) => `<button class="btn soft" data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>
-      </div>` : ''}
       <p class="small muted center">학습 기록은 이름별로 인터넷에 저장돼요. 다른 기기에서도 이름과 비밀번호로 이어서 공부할 수 있어요.<br>
         비밀번호를 잊었다면 선생님께 말씀드리세요. · <a href="#/teacher">선생님 메뉴</a></p>
       <p class="maker">만든이 ㅊㅂㄹ</p>`;
@@ -904,7 +904,7 @@
     const nameEl = document.getElementById('name');
     const pwEl = document.getElementById('pw');
     $app.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { loginMode = b.dataset.mode; renderLogin(); }));
-    $app.querySelectorAll('[data-name]').forEach((b) => b.addEventListener('click', () => { nameEl.value = b.dataset.name; pwEl.focus(); }));
+    if (saved) pwEl.focus();
     let busy = false;
     document.getElementById('login').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -934,6 +934,7 @@
           return fb('비밀번호가 맞지 않아요.');
         }
       }
+      setRememberedId(document.getElementById('remember').checked ? n : '');
       loginMode = 'in';
       login(n);
       location.hash = '#/';
